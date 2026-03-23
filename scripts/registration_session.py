@@ -410,13 +410,11 @@ def maybe_store_api_key(
     )
 
 
-def create_session(server_url: str) -> dict[str, Any]:
-    command = args.command
-    assert command == "create"
+def create_session(server_url: str, auth_flow: str) -> dict[str, Any]:
     return request_json(
         f"{server_url}/v1/registration/sessions",
         method="POST",
-        payload={"provider": "workos", "auth_flow": args.auth_flow},
+        payload={"provider": "workos", "auth_flow": auth_flow},
     )
 
 
@@ -442,7 +440,7 @@ def main() -> int:
     server_url = require_server_url(args.server_url)
 
     if args.command == "create":
-        session = create_session(server_url)
+        session = create_session(server_url, args.auth_flow)
     elif args.command == "status":
         session = fetch_session(server_url, args.session_id)
     elif args.command == "watch":

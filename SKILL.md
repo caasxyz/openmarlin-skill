@@ -1,20 +1,7 @@
 ---
 name: claw-federation-registration
 description: "Guide platform registration, account linking, and explicit provider routing for claw-federation in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, or send a platform request to a specific provider with simple routing hints. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
-metadata:
-  {
-    "openclaw":
-      {
-        "emoji": "🦞",
-        "skillKey": "claw-federation-registration",
-        "requires":
-          {
-            "bins": ["python3"],
-            "env": ["CLAW_FEDERATION_SERVER_URL"],
-          },
-        "primaryEnv": "CLAW_FEDERATION_SERVER_URL",
-      },
-  }
+metadata: {"openclaw":{"emoji":"🦞","skillKey":"claw-federation-registration","requires":{"bins":["python3"],"env":["CLAW_FEDERATION_SERVER_URL"]},"primaryEnv":"CLAW_FEDERATION_SERVER_URL"}}
 ---
 
 # Claw Federation Registration
