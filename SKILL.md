@@ -10,7 +10,7 @@ metadata:
         "requires":
           {
             "bins": ["python3"],
-            "env": ["CLAW_FEDERATION_SERVER_URL", "CLAW_FEDERATION_PLATFORM_API_KEY"],
+            "env": ["CLAW_FEDERATION_SERVER_URL"],
           },
         "primaryEnv": "CLAW_FEDERATION_SERVER_URL",
       },
@@ -93,8 +93,16 @@ Required:
 
 ```bash
 export CLAW_FEDERATION_SERVER_URL="http://127.0.0.1:3000"
+```
+
+Optional direct API key override:
+
+```bash
 export CLAW_FEDERATION_PLATFORM_API_KEY="claw_wsk_..."
 ```
+
+After bootstrap, this env var is no longer required if you store the key into
+OpenClaw auth profiles.
 
 Optional browser-handoff templates:
 
@@ -164,6 +172,14 @@ Wait for completion and immediately issue the key:
 python3 scripts/registration_session.py bootstrap --session-id <session-id>
 ```
 
+Wait for completion, issue the key, and store it in OpenClaw auth profiles:
+
+```bash
+python3 scripts/registration_session.py bootstrap \
+  --session-id <session-id> \
+  --store
+```
+
 Send an authenticated `/v1/responses` request to an explicitly selected
 provider:
 
@@ -206,10 +222,11 @@ python3 scripts/platform_request.py invoke \
    - otherwise show the device code and explain the platform operator must
      provide the verification URL
 5. Continue polling with `watch` and keep the conversation in OpenClaw.
-6. On completion, issue the first workspace API key with
-   `python3 scripts/registration_session.py issue-api-key --session-id <session-id>`.
+6. On completion, issue and store the first workspace API key with
+   `python3 scripts/registration_session.py bootstrap --session-id <session-id> --store`
+   or `issue-api-key --store` if the session is already completed.
 7. Summarize the linked account, workspace context, and that a platform API key
-   was bootstrapped for OpenClaw.
+   was bootstrapped and stored for OpenClaw reuse.
 
 ### Connect Existing Account
 
@@ -245,9 +262,12 @@ When a session reaches `completed`:
 
 The returned `secret` is the steady-state platform credential for OpenClaw.
 
-- prefer secure local credential storage over plain repo files
-- if an integration layer later writes this into OpenClaw config, keep it out of
-  committed workspace content
+- prefer OpenClaw auth profiles over plain repo files or ordinary config
+- store the key in `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`
+  using the default profile `claw-federation-platform:default`
+- after storing with `--store`, later `platform_request.py` calls can reuse the
+  key automatically without re-exporting it
+- do not write the key into ordinary `openclaw.json` fields
 - if you only need to hand it off manually, use process env or operator-managed
   secret storage rather than chat history when possible
 

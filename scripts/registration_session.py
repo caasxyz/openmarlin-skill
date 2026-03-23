@@ -13,6 +13,12 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from openclaw_platform_auth import (
+    DEFAULT_AGENT_ID,
+    DEFAULT_PROFILE_ID,
+    upsert_platform_api_key,
+)
+
 
 DEFAULT_POLL_INTERVAL_SECONDS = 2.0
 DEFAULT_TIMEOUT_SECONDS = 300.0
@@ -86,6 +92,21 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_API_KEY_LABEL,
         help=f"Optional API key label. Default: {DEFAULT_API_KEY_LABEL}.",
     )
+    issue_parser.add_argument(
+        "--store",
+        action="store_true",
+        help="Store the issued API key in OpenClaw auth-profiles.json.",
+    )
+    issue_parser.add_argument(
+        "--profile-id",
+        default=DEFAULT_PROFILE_ID,
+        help=f"Auth profile ID used when --store is set. Default: {DEFAULT_PROFILE_ID}.",
+    )
+    issue_parser.add_argument(
+        "--agent-id",
+        default=DEFAULT_AGENT_ID,
+        help=f"OpenClaw agent ID used when --store is set. Default: {DEFAULT_AGENT_ID}.",
+    )
 
     bootstrap_parser = subparsers.add_parser(
         "bootstrap",
@@ -109,6 +130,21 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=DEFAULT_TIMEOUT_SECONDS,
         help=f"Maximum total wait time in seconds. Default: {DEFAULT_TIMEOUT_SECONDS}.",
+    )
+    bootstrap_parser.add_argument(
+        "--store",
+        action="store_true",
+        help="Store the issued API key in OpenClaw auth-profiles.json.",
+    )
+    bootstrap_parser.add_argument(
+        "--profile-id",
+        default=DEFAULT_PROFILE_ID,
+        help=f"Auth profile ID used when --store is set. Default: {DEFAULT_PROFILE_ID}.",
+    )
+    bootstrap_parser.add_argument(
+        "--agent-id",
+        default=DEFAULT_AGENT_ID,
+        help=f"OpenClaw agent ID used when --store is set. Default: {DEFAULT_AGENT_ID}.",
     )
 
     return parser.parse_args()
@@ -316,6 +352,62 @@ def print_api_key_issue(result: dict[str, Any], session: dict[str, Any] | None =
     print(f"  export CLAW_FEDERATION_PLATFORM_API_KEY='{result.get('secret', '')}'")
 
 
+def build_storage_metadata(
+    *,
+    server_url: str,
+    session: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, str]:
+    metadata: dict[str, str] = {"server_url": server_url}
+
+    api_key = result.get("api_key")
+    if isinstance(api_key, dict):
+        for field in ("key_id", "workspace_id", "created_at", "label", "status"):
+            value = api_key.get(field)
+            if isinstance(value, str) and value:
+                metadata[field] = value
+
+    completion = session.get("completion")
+    if isinstance(completion, dict):
+        account_id = completion.get("account_id")
+        if isinstance(account_id, str) and account_id:
+            metadata["account_id"] = account_id
+        workspace = completion.get("workspace")
+        if isinstance(workspace, dict):
+            workspace_slug = workspace.get("slug")
+            if isinstance(workspace_slug, str) and workspace_slug:
+                metadata["workspace_slug"] = workspace_slug
+            workspace_display_name = workspace.get("display_name")
+            if isinstance(workspace_display_name, str) and workspace_display_name:
+                metadata["workspace_display_name"] = workspace_display_name
+
+    return metadata
+
+
+def maybe_store_api_key(
+    *,
+    should_store: bool,
+    server_url: str,
+    session: dict[str, Any],
+    result: dict[str, Any],
+    profile_id: str,
+    agent_id: str,
+) -> dict[str, Any] | None:
+    if not should_store:
+        return None
+
+    secret = result.get("secret")
+    if not isinstance(secret, str) or not secret:
+        raise SystemExit("API key bootstrap response is missing the secret required for storage.")
+
+    return upsert_platform_api_key(
+        secret=secret,
+        profile_id=profile_id,
+        agent_id=agent_id,
+        metadata=build_storage_metadata(server_url=server_url, session=session, result=result),
+    )
+
+
 def create_session(server_url: str) -> dict[str, Any]:
     command = args.command
     assert command == "create"
@@ -364,6 +456,14 @@ def main() -> int:
     elif args.command == "issue-api-key":
         session = fetch_session(server_url, args.session_id)
         result = issue_api_key(server_url, session, args.label)
+        storage = maybe_store_api_key(
+            should_store=args.store,
+            server_url=server_url,
+            session=session,
+            result=result,
+            profile_id=args.profile_id,
+            agent_id=args.agent_id,
+        )
     elif args.command == "bootstrap":
         session = watch_session(
             server_url,
@@ -372,6 +472,14 @@ def main() -> int:
             args.timeout_seconds,
         )
         result = issue_api_key(server_url, session, args.label)
+        storage = maybe_store_api_key(
+            should_store=args.store,
+            server_url=server_url,
+            session=session,
+            result=result,
+            profile_id=args.profile_id,
+            agent_id=args.agent_id,
+        )
     else:
         raise SystemExit(f"Unsupported command: {args.command}")
 
@@ -384,11 +492,18 @@ def main() -> int:
             }
         else:
             output = result
+        if storage:
+            output["stored"] = storage
 
         if args.json:
             print(json.dumps(output, indent=2, sort_keys=True))
         else:
             print_api_key_issue(result, session)
+            if storage:
+                print("Stored:")
+                print(f"  Auth store: {storage['auth_store_path']}")
+                print(f"  Profile ID: {storage['profile_id']}")
+                print(f"  Agent ID: {storage['agent_id']}")
     else:
         if args.json:
             print(json.dumps(session, indent=2, sort_keys=True))

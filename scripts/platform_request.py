@@ -12,6 +12,8 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from openclaw_platform_auth import DEFAULT_AGENT_ID, DEFAULT_PROFILE_ID, resolve_platform_api_key
+
 
 ERROR_HELP = {
     "missing_api_key": "Missing platform API key. Export CLAW_FEDERATION_PLATFORM_API_KEY first.",
@@ -41,7 +43,7 @@ def parse_args() -> argparse.Namespace:
     common.add_argument(
         "--api-key",
         default=os.environ.get("CLAW_FEDERATION_PLATFORM_API_KEY", "").strip(),
-        help="Platform API key. Defaults to CLAW_FEDERATION_PLATFORM_API_KEY.",
+        help="Platform API key. Defaults to CLAW_FEDERATION_PLATFORM_API_KEY, then OpenClaw auth-profiles.json.",
     )
     common.add_argument(
         "--provider",
@@ -58,6 +60,16 @@ def parse_args() -> argparse.Namespace:
         "--json",
         action="store_true",
         help="Emit structured JSON output when possible.",
+    )
+    common.add_argument(
+        "--profile-id",
+        default=DEFAULT_PROFILE_ID,
+        help=f"OpenClaw auth profile ID used when resolving a stored platform key. Default: {DEFAULT_PROFILE_ID}.",
+    )
+    common.add_argument(
+        "--agent-id",
+        default=DEFAULT_AGENT_ID,
+        help=f"OpenClaw agent ID used when resolving a stored platform key. Default: {DEFAULT_AGENT_ID}.",
     )
 
     parser = argparse.ArgumentParser(
@@ -104,6 +116,20 @@ def require_non_empty(value: str, message: str) -> str:
     if not normalized:
         raise SystemExit(message)
     return normalized
+
+
+def resolve_api_key_or_exit(raw_api_key: str, profile_id: str, agent_id: str) -> tuple[str, str]:
+    if raw_api_key.strip():
+        return raw_api_key.strip(), "env-or-flag"
+
+    key, _profile, auth_store_path = resolve_platform_api_key(profile_id=profile_id, agent_id=agent_id)
+    if key:
+        return key, f"auth-profiles:{auth_store_path}"
+
+    raise SystemExit(
+        "Missing platform API key. Set CLAW_FEDERATION_PLATFORM_API_KEY, pass --api-key, "
+        "or bootstrap with --store so the key is saved into OpenClaw auth-profiles.json."
+    )
 
 
 def load_json_object(raw: str, *, source: str) -> dict[str, Any]:
@@ -227,10 +253,7 @@ def main() -> int:
         args.server_url,
         "Missing server URL. Set CLAW_FEDERATION_SERVER_URL or pass --server-url.",
     ).rstrip("/")
-    api_key = require_non_empty(
-        args.api_key,
-        "Missing platform API key. Set CLAW_FEDERATION_PLATFORM_API_KEY or pass --api-key.",
-    )
+    api_key, api_key_source = resolve_api_key_or_exit(args.api_key, args.profile_id, args.agent_id)
     provider = require_non_empty(
         args.provider,
         "Missing provider. Pass --provider or set CLAW_FEDERATION_DEFAULT_PROVIDER_ID.",
@@ -285,6 +308,7 @@ def main() -> int:
                         "status": status,
                         "provider": provider,
                         "labels": labels or {},
+                        "api_key_source": api_key_source,
                         "response": payload,
                         "message": message,
                     },
@@ -304,6 +328,7 @@ def main() -> int:
                     "status": status,
                     "provider": provider,
                     "labels": labels or {},
+                    "api_key_source": api_key_source,
                     "response_headers": response_headers,
                     "response": payload,
                 },
