@@ -37,6 +37,8 @@ Use this skill when a user wants to create, connect, or resume a
 - Surface only simple routing hints such as `region=ap-sg` or `tier=premium`.
 - Do not invent hidden routing labels or pretend to bypass server validation.
 - When routing fails, explain the server-side reason in plain language.
+- Treat structured `402 Payment Required` as a guided recovery state, not a generic transport failure.
+- Keep 402 recovery inside OpenClaw until the required Stripe checkout step.
 
 ## Server Contract
 
@@ -86,6 +88,17 @@ It returns:
 - `api_key.last_used_at`
 - `api_key.label`
 - `secret`
+
+When platform balance is insufficient, server-side request flows may return a
+structured `402` payload:
+
+- `error_code = insufficient_balance`
+- `message`
+- `workspace_id`
+- `current_balance.amount / unit`
+- `required_balance.amount / unit`
+
+That 402 contract should drive recovery UX instead of generic error handling.
 
 ## Setup
 
@@ -178,6 +191,27 @@ Wait for completion, issue the key, and store it in OpenClaw auth profiles:
 python3 scripts/registration_session.py bootstrap \
   --session-id <session-id> \
   --store
+```
+
+Explain a structured 402 response and get the next recovery steps:
+
+```bash
+python3 scripts/payment_recovery.py explain-402 \
+  --response-json '{"error_code":"insufficient_balance","message":"Workspace balance is insufficient for this request.","workspace_id":"ws_123","current_balance":{"amount":0,"unit":"credits"},"required_balance":{"amount":1,"unit":"credits"}}'
+```
+
+Create a top-up session directly from the 402 shortfall:
+
+```bash
+python3 scripts/payment_recovery.py create-topup \
+  --response-json '{"error_code":"insufficient_balance","message":"Workspace balance is insufficient for this request.","workspace_id":"ws_123","current_balance":{"amount":0,"unit":"credits"},"required_balance":{"amount":1,"unit":"credits"}}'
+```
+
+Check or wait on a top-up session:
+
+```bash
+python3 scripts/payment_recovery.py status --session-id <topup-session-id>
+python3 scripts/payment_recovery.py watch --session-id <topup-session-id>
 ```
 
 Send an authenticated `/v1/responses` request to an explicitly selected
@@ -309,6 +343,19 @@ Translate common server responses into plain language:
 - `llm_model_not_allowed`: the requested model is outside the provider allowlist
 - `invalid_routing_labels`: the label hints were not valid JSON or `key=value`
   pairs
+
+## 402 Recovery Guidance
+
+When the server returns a structured `402 insufficient_balance` response:
+
+- show the current balance, required balance, and shortfall explicitly
+- tell the user this is a recoverable billing state, not a broken request
+- offer the next two actions inside OpenClaw:
+  `python3 scripts/payment_recovery.py create-topup ...`
+  `python3 scripts/payment_recovery.py watch --session-id <topup-session-id>`
+- keep the browser handoff limited to the returned Stripe `checkout_url`
+
+Do not flatten this into “request failed” or “transport error”.
 
 When these happen, keep the explanation concrete:
 

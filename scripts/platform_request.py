@@ -13,6 +13,7 @@ import urllib.request
 from typing import Any
 
 from openclaw_platform_auth import DEFAULT_AGENT_ID, DEFAULT_PROFILE_ID, resolve_platform_api_key
+from payment_recovery import build_recovery_commands, parse_insufficient_balance
 
 
 ERROR_HELP = {
@@ -220,6 +221,22 @@ def request(
 
 def explain_error(code: int, payload: dict[str, Any] | str, provider: str | None, labels: dict[str, str] | None) -> str:
     if isinstance(payload, dict):
+        recovery = parse_insufficient_balance(payload)
+        if code == 402 and recovery:
+            commands = build_recovery_commands(recovery)
+            context_parts = []
+            if provider:
+                context_parts.append(f"provider={provider}")
+            if labels:
+                context_parts.append(f"labels={json.dumps(labels, sort_keys=True)}")
+            context = f" Sent {', '.join(context_parts)}." if context_parts else ""
+            return (
+                f"HTTP 402 insufficient_balance: {recovery['message']} "
+                f"Current={recovery['current_balance']['amount']} {recovery['current_balance']['unit']}, "
+                f"required={recovery['required_balance']['amount']} {recovery['required_balance']['unit']}, "
+                f"shortfall={recovery['shortfall']['amount']} {recovery['shortfall']['unit']}.{context} "
+                f"Recovery: {commands[0]} then {commands[1]}"
+            )
         error_code = payload.get("error")
         if isinstance(error_code, str):
             explanation = ERROR_HELP.get(error_code, "The server rejected the request.")
@@ -300,6 +317,7 @@ def main() -> int:
 
     if status >= 400:
         message = explain_error(status, payload, provider, labels)
+        recovery = parse_insufficient_balance(payload) if isinstance(payload, dict) else None
         if args.json:
             print(
                 json.dumps(
@@ -311,6 +329,7 @@ def main() -> int:
                         "api_key_source": api_key_source,
                         "response": payload,
                         "message": message,
+                        **({"recovery": recovery, "commands": build_recovery_commands(recovery)} if recovery else {}),
                     },
                     indent=2,
                     sort_keys=True,

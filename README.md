@@ -10,3 +10,5 @@ Primary entrypoints:
   bootstrapping workspace API keys after registration
 - `scripts/platform_request.py` for explicit provider selection, routing hints,
   and authenticated `/invoke` or `/v1/responses` platform requests
+- `scripts/payment_recovery.py` for structured 402 recovery guidance and
+  authenticated top-up session handling
