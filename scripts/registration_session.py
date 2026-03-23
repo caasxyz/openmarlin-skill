@@ -16,6 +16,7 @@ from typing import Any
 
 DEFAULT_POLL_INTERVAL_SECONDS = 2.0
 DEFAULT_TIMEOUT_SECONDS = 300.0
+DEFAULT_API_KEY_LABEL = "OpenClaw bootstrap"
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,6 +69,42 @@ def parse_args() -> argparse.Namespace:
         help=f"Polling interval in seconds. Default: {DEFAULT_POLL_INTERVAL_SECONDS}.",
     )
     watch_parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=DEFAULT_TIMEOUT_SECONDS,
+        help=f"Maximum total wait time in seconds. Default: {DEFAULT_TIMEOUT_SECONDS}.",
+    )
+
+    issue_parser = subparsers.add_parser(
+        "issue-api-key",
+        help="Issue a workspace API key for a completed registration session.",
+        parents=[json_parent],
+    )
+    issue_parser.add_argument("--session-id", required=True, help="Registration session ID.")
+    issue_parser.add_argument(
+        "--label",
+        default=DEFAULT_API_KEY_LABEL,
+        help=f"Optional API key label. Default: {DEFAULT_API_KEY_LABEL}.",
+    )
+
+    bootstrap_parser = subparsers.add_parser(
+        "bootstrap",
+        help="Wait for completion, then issue a workspace API key.",
+        parents=[json_parent],
+    )
+    bootstrap_parser.add_argument("--session-id", required=True, help="Registration session ID.")
+    bootstrap_parser.add_argument(
+        "--label",
+        default=DEFAULT_API_KEY_LABEL,
+        help=f"Optional API key label. Default: {DEFAULT_API_KEY_LABEL}.",
+    )
+    bootstrap_parser.add_argument(
+        "--interval-seconds",
+        type=float,
+        default=DEFAULT_POLL_INTERVAL_SECONDS,
+        help=f"Polling interval in seconds. Default: {DEFAULT_POLL_INTERVAL_SECONDS}.",
+    )
+    bootstrap_parser.add_argument(
         "--timeout-seconds",
         type=float,
         default=DEFAULT_TIMEOUT_SECONDS,
@@ -211,6 +248,74 @@ def print_session(session: dict[str, Any]) -> None:
         print("Completion: waiting for external auth")
 
 
+def build_api_key_issue_payload(session: dict[str, Any], label: str | None) -> dict[str, Any]:
+    handoff = session.get("handoff")
+    if not isinstance(handoff, dict):
+        raise SystemExit("Registration session is missing handoff details.")
+
+    payload: dict[str, Any] = {}
+    handoff_type = handoff.get("type")
+    if handoff_type == "device":
+        device_code = handoff.get("device_code")
+        if not isinstance(device_code, str) or not device_code:
+            raise SystemExit("Registration session is missing device_code for API key bootstrap.")
+        payload["device_code"] = device_code
+    elif handoff_type == "browser":
+        callback_state = handoff.get("callback_state")
+        if not isinstance(callback_state, str) or not callback_state:
+            raise SystemExit("Registration session is missing callback_state for API key bootstrap.")
+        payload["callback_state"] = callback_state
+    else:
+        raise SystemExit(f"Unsupported handoff type for API key bootstrap: {handoff_type}")
+
+    if label:
+        payload["label"] = label
+
+    return payload
+
+
+def issue_api_key(server_url: str, session: dict[str, Any], label: str | None) -> dict[str, Any]:
+    session_id = session.get("registration_session_id")
+    if not isinstance(session_id, str) or not session_id:
+        raise SystemExit("Registration session is missing registration_session_id.")
+    if session.get("state") != "completed":
+        raise SystemExit("Registration session must be completed before issuing an API key.")
+
+    return request_json(
+        f"{server_url}/v1/registration/sessions/{urllib.parse.quote(session_id)}/api-keys",
+        method="POST",
+        payload=build_api_key_issue_payload(session, label),
+    )
+
+
+def print_api_key_issue(result: dict[str, Any], session: dict[str, Any] | None = None) -> None:
+    if session is not None:
+        print(f"Session ID: {session.get('registration_session_id', '<unknown>')}")
+        completion = session.get("completion")
+        if isinstance(completion, dict):
+            print(f"Account ID: {completion.get('account_id', '<unknown>')}")
+            workspace = completion.get("workspace")
+            if isinstance(workspace, dict):
+                print(
+                    f"Workspace: {workspace.get('display_name', '<unknown>')} "
+                    f"({workspace.get('slug', '<unknown>')})"
+                )
+
+    api_key = result.get("api_key")
+    if not isinstance(api_key, dict):
+        raise SystemExit("API key bootstrap response is missing api_key metadata.")
+
+    print(f"Key ID: {api_key.get('key_id', '<unknown>')}")
+    print(f"Workspace ID: {api_key.get('workspace_id', '<unknown>')}")
+    print(f"Status: {api_key.get('status', '<unknown>')}")
+    print(f"Label: {api_key.get('label', '<unknown>')}")
+    print(f"Created at: {api_key.get('created_at', '<unknown>')}")
+    print(f"Last used at: {api_key.get('last_used_at', '<unknown>')}")
+    print(f"Secret: {result.get('secret', '<missing>')}")
+    print("Export:")
+    print(f"  export CLAW_FEDERATION_PLATFORM_API_KEY='{result.get('secret', '')}'")
+
+
 def create_session(server_url: str) -> dict[str, Any]:
     command = args.command
     assert command == "create"
@@ -256,15 +361,41 @@ def main() -> int:
             args.interval_seconds,
             args.timeout_seconds,
         )
+    elif args.command == "issue-api-key":
+        session = fetch_session(server_url, args.session_id)
+        result = issue_api_key(server_url, session, args.label)
+    elif args.command == "bootstrap":
+        session = watch_session(
+            server_url,
+            args.session_id,
+            args.interval_seconds,
+            args.timeout_seconds,
+        )
+        result = issue_api_key(server_url, session, args.label)
     else:
         raise SystemExit(f"Unsupported command: {args.command}")
 
-    if args.json:
-        print(json.dumps(session, indent=2, sort_keys=True))
-    else:
-        print_session(session)
+    if args.command in {"issue-api-key", "bootstrap"}:
+        output: dict[str, Any]
+        if args.command == "bootstrap":
+            output = {
+                "session": session,
+                "issued": result,
+            }
+        else:
+            output = result
 
-    return 3 if session.get("state") == "expired" else 0
+        if args.json:
+            print(json.dumps(output, indent=2, sort_keys=True))
+        else:
+            print_api_key_issue(result, session)
+    else:
+        if args.json:
+            print(json.dumps(session, indent=2, sort_keys=True))
+        else:
+            print_session(session)
+
+    return 3 if args.command in {"create", "status", "watch"} and session.get("state") == "expired" else 0
 
 
 if __name__ == "__main__":

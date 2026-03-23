@@ -58,7 +58,26 @@ When completed, the session yields:
 - `completion.credential_bootstrap.status`
 
 The current bootstrap status is expected to be
-`pending_api_key_issue` until the API key flow lands.
+`pending_api_key_issue` until you call the API key bootstrap endpoint.
+
+After registration completes, the skill can continue with:
+
+- `POST /v1/registration/sessions/:sessionId/api-keys`
+
+That endpoint uses the original handoff proof:
+
+- `device_code` for `device` flows
+- `callback_state` for `workos_callback` flows
+
+It returns:
+
+- `api_key.key_id`
+- `api_key.workspace_id`
+- `api_key.status`
+- `api_key.created_at`
+- `api_key.last_used_at`
+- `api_key.label`
+- `secret`
 
 ## Setup
 
@@ -117,6 +136,18 @@ Get raw JSON for tool chaining:
 python3 scripts/registration_session.py watch --session-id <session-id> --json
 ```
 
+Issue the initial workspace API key after completion:
+
+```bash
+python3 scripts/registration_session.py issue-api-key --session-id <session-id>
+```
+
+Wait for completion and immediately issue the key:
+
+```bash
+python3 scripts/registration_session.py bootstrap --session-id <session-id>
+```
+
 ## Recommended Playbook
 
 ### New Registration
@@ -131,7 +162,10 @@ python3 scripts/registration_session.py watch --session-id <session-id> --json
    - otherwise show the device code and explain the platform operator must
      provide the verification URL
 5. Continue polling with `watch` and keep the conversation in OpenClaw.
-6. On completion, summarize the linked account and workspace context.
+6. On completion, issue the first workspace API key with
+   `python3 scripts/registration_session.py issue-api-key --session-id <session-id>`.
+7. Summarize the linked account, workspace context, and that a platform API key
+   was bootstrapped for OpenClaw.
 
 ### Connect Existing Account
 
@@ -157,9 +191,18 @@ When a session reaches `completed`:
 
 - confirm whether this was a new account or an existing linked account
 - summarize the workspace `display_name` and `slug`
-- preserve the `account_id` and `workspace_id` for the next bootstrap step
-- explicitly note that platform credential bootstrap is still
-  `pending_api_key_issue`
+- preserve the `account_id` and `workspace_id` for the bootstrap step
+- if no key has been issued yet, call the API key bootstrap endpoint with the
+  original handoff proof from the session
+- treat the returned `secret` as sensitive and do not paste it back into
+  version-controlled files
 
-Do not claim that platform API key setup is done yet unless a later server flow
-actually returns that credential.
+## Credential Handling
+
+The returned `secret` is the steady-state platform credential for OpenClaw.
+
+- prefer secure local credential storage over plain repo files
+- if an integration layer later writes this into OpenClaw config, keep it out of
+  committed workspace content
+- if you only need to hand it off manually, use process env or operator-managed
+  secret storage rather than chat history when possible
