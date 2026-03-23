@@ -43,30 +43,35 @@ This is the simplest path for development or local testing.
 
 ### Option 2: Install as a local OpenClaw skill
 
-Copy the repo contents into your local skills directory so OpenClaw can load it
-as a standard installed skill:
+Copy the repo contents into your local OpenClaw skills workspace so OpenClaw can
+load it as a standard installed skill. The default skills root is:
+
+```text
+~/.openclaw/workspace/skills/
+```
+
+Install into that default location:
 
 ```bash
-export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-mkdir -p "$CODEX_HOME/skills/claw-federation"
+mkdir -p "$HOME/.openclaw/workspace/skills/claw-federation"
 rsync -a --delete \
   --exclude '.git' \
   /path/to/claw-federation-skill/ \
-  "$CODEX_HOME/skills/claw-federation/"
+  "$HOME/.openclaw/workspace/skills/claw-federation/"
 ```
 
 After install, the main entrypoint should be:
 
 ```text
-$CODEX_HOME/skills/claw-federation/SKILL.md
+~/.openclaw/workspace/skills/claw-federation/SKILL.md
 ```
 
 The helper scripts remain available relative to that installed skill directory:
 
 ```text
-$CODEX_HOME/skills/claw-federation/scripts/registration_session.py
-$CODEX_HOME/skills/claw-federation/scripts/platform_request.py
-$CODEX_HOME/skills/claw-federation/scripts/payment_recovery.py
+~/.openclaw/workspace/skills/claw-federation/scripts/registration_session.py
+~/.openclaw/workspace/skills/claw-federation/scripts/platform_request.py
+~/.openclaw/workspace/skills/claw-federation/scripts/payment_recovery.py
 ```
 
 ## Requirements
