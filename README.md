@@ -84,8 +84,6 @@ Optional but commonly useful:
 - `CLAW_FEDERATION_PLATFORM_API_KEY`
 - `CLAW_FEDERATION_DEFAULT_PROVIDER_ID`
 - `CLAW_FEDERATION_DEFAULT_ROUTING_LABELS`
-- `CLAW_FEDERATION_WORKOS_DEVICE_URL_TEMPLATE`
-- `CLAW_FEDERATION_WORKOS_CALLBACK_URL_TEMPLATE`
 
 These values do not have to come from a shell `export`. The helper scripts now
 resolve them in this order:
@@ -119,6 +117,10 @@ So OpenClaw can remember values such as:
 
 In other words, users do not need to hand-edit config files if OpenClaw is
 writing skill config through its normal settings or `skills.update` flow.
+
+For browser handoff during registration, the skill now expects the server to
+return `handoff.authorization_url` directly. It no longer relies on locally
+configured WorkOS URL templates.
 
 ## First Run
 

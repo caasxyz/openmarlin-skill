@@ -77,6 +77,14 @@ It returns:
 - `api_key.label`
 - `secret`
 
+For browser handoff, registration sessions may also expose:
+
+- `handoff.authorization_url`
+- `handoff.redirect_uri`
+
+OpenClaw should use the server-provided `authorization_url` directly rather
+than reconstructing WorkOS entry URLs locally.
+
 When platform balance is insufficient, server-side request flows may return a
 structured `402` payload:
 
@@ -139,19 +147,6 @@ export CLAW_FEDERATION_PLATFORM_API_KEY="claw_wsk_..."
 After bootstrap, this env var is no longer required if you store the key into
 OpenClaw auth profiles.
 
-Optional browser-handoff templates:
-
-```bash
-export CLAW_FEDERATION_WORKOS_DEVICE_URL_TEMPLATE="https://platform.example.com/register/device?code={device_code}"
-export CLAW_FEDERATION_WORKOS_CALLBACK_URL_TEMPLATE="https://platform.example.com/register?state={callback_state}"
-```
-
-Template placeholders:
-
-- `{device_code}`
-- `{callback_state}`
-- `{registration_session_id}`
-
 Optional request-routing defaults:
 
 ```bash
@@ -159,9 +154,9 @@ export CLAW_FEDERATION_DEFAULT_PROVIDER_ID="node-a"
 export CLAW_FEDERATION_DEFAULT_ROUTING_LABELS='{"region":"ap-sg"}'
 ```
 
-If no browser template is configured, keep the user in OpenClaw, surface the
-device code or callback state, and explain that the deployment-specific WorkOS
-entry URL must be supplied by the platform operator.
+If the server does not return `handoff.authorization_url`, keep the user in
+OpenClaw, surface the device code or callback state, and explain that the
+deployment is missing the required server-side WorkOS handoff URL contract.
 
 ## Commands
 

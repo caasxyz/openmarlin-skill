@@ -192,25 +192,10 @@ def build_browser_url(session: dict[str, Any]) -> str | None:
     if not isinstance(handoff, dict):
         return None
 
-    template: str | None
-    if handoff.get("type") == "device":
-        template, _source = get_skill_env("CLAW_FEDERATION_WORKOS_DEVICE_URL_TEMPLATE")
-    elif handoff.get("type") == "browser":
-        template, _source = get_skill_env("CLAW_FEDERATION_WORKOS_CALLBACK_URL_TEMPLATE")
-    else:
-        template = None
-
-    if not template:
+    authorization_url = handoff.get("authorization_url")
+    if not isinstance(authorization_url, str) or not authorization_url.strip():
         return None
-
-    replacements = {
-        "callback_state": str(handoff.get("callback_state", "")),
-        "device_code": str(handoff.get("device_code", "")),
-        "registration_session_id": str(session.get("registration_session_id", "")),
-    }
-    for key, value in replacements.items():
-        template = template.replace(f"{{{key}}}", urllib.parse.quote(value, safe=""))
-    return template
+    return authorization_url.strip()
 
 
 def completion_summary(session: dict[str, Any]) -> list[str]:
@@ -275,7 +260,7 @@ def print_session(session: dict[str, Any]) -> None:
     if browser_url:
         print(f"Browser URL: {browser_url}")
     elif session.get("state") == "pending_external_auth":
-        print("Browser URL: <not configured>")
+        print("Browser URL: <not provided by server>")
 
     completion_lines = completion_summary(session)
     if completion_lines:
