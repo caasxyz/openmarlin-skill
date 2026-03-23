@@ -1,7 +1,15 @@
 # claw-federation-skill
 
-OpenClaw skill for guided platform registration and account linking against
+OpenClaw skill for guided platform access and billing workflows against
 `claw-federation-server`.
+
+This repo covers the OpenClaw-first UX for:
+
+- registration and account linking
+- platform API key bootstrap and auth-profile storage
+- explicit provider selection and routing hints
+- structured `402 Payment Required` recovery
+- guided top-up and last-known balance management
 
 Primary entrypoints:
 
@@ -13,3 +21,8 @@ Primary entrypoints:
 - `scripts/payment_recovery.py` for structured 402 recovery guidance and
   authenticated top-up session handling, local balance snapshots, and tracked
   top-up history
+
+Internal helpers:
+
+- `scripts/openclaw_platform_auth.py` for OpenClaw auth-profile storage
+- `scripts/openclaw_billing_state.py` for local billing-state persistence
