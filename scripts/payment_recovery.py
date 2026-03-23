@@ -13,6 +13,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from openclaw_skill_config import get_skill_env
 from openclaw_billing_state import (
     get_last_balance_snapshot,
     list_topup_sessions,
@@ -27,11 +28,12 @@ DEFAULT_POLL_INTERVAL_SECONDS = 2.0
 
 
 def parse_args() -> argparse.Namespace:
+    default_server_url, _server_url_source = get_skill_env("CLAW_FEDERATION_SERVER_URL")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
         "--server-url",
-        default=os.environ.get("CLAW_FEDERATION_SERVER_URL", "").strip(),
-        help="Base URL for claw-federation-server. Defaults to CLAW_FEDERATION_SERVER_URL.",
+        default=(default_server_url or "").strip(),
+        help="Base URL for claw-federation-server. Defaults to CLAW_FEDERATION_SERVER_URL, then OpenClaw skill config.",
     )
     common.add_argument(
         "--api-key",

@@ -12,6 +12,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from openclaw_skill_config import get_skill_env
 from openclaw_billing_state import record_balance_snapshot
 from openclaw_platform_auth import DEFAULT_AGENT_ID, DEFAULT_PROFILE_ID, resolve_platform_api_key
 from payment_recovery import build_recovery_commands, parse_insufficient_balance
@@ -36,11 +37,13 @@ ERROR_HELP = {
 
 
 def parse_args() -> argparse.Namespace:
+    default_server_url, _server_url_source = get_skill_env("CLAW_FEDERATION_SERVER_URL")
+    default_provider, _provider_source = get_skill_env("CLAW_FEDERATION_DEFAULT_PROVIDER_ID")
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
         "--server-url",
-        default=os.environ.get("CLAW_FEDERATION_SERVER_URL", "").strip(),
-        help="Base URL for claw-federation-server. Defaults to CLAW_FEDERATION_SERVER_URL.",
+        default=(default_server_url or "").strip(),
+        help="Base URL for claw-federation-server. Defaults to CLAW_FEDERATION_SERVER_URL, then OpenClaw skill config.",
     )
     common.add_argument(
         "--api-key",
@@ -49,8 +52,8 @@ def parse_args() -> argparse.Namespace:
     )
     common.add_argument(
         "--provider",
-        default=os.environ.get("CLAW_FEDERATION_DEFAULT_PROVIDER_ID", "").strip(),
-        help="Explicit provider target. Defaults to CLAW_FEDERATION_DEFAULT_PROVIDER_ID.",
+        default=(default_provider or "").strip(),
+        help="Explicit provider target. Defaults to CLAW_FEDERATION_DEFAULT_PROVIDER_ID, then OpenClaw skill config.",
     )
     common.add_argument(
         "--label",
@@ -167,7 +170,8 @@ def parse_label_pairs(values: list[str]) -> dict[str, str]:
 
 def resolve_labels(cli_labels: list[str]) -> dict[str, str] | None:
     merged: dict[str, str] = {}
-    env_raw = os.environ.get("CLAW_FEDERATION_DEFAULT_ROUTING_LABELS", "").strip()
+    env_raw, _source = get_skill_env("CLAW_FEDERATION_DEFAULT_ROUTING_LABELS")
+    env_raw = (env_raw or "").strip()
     if env_raw:
         env_labels = load_json_object(env_raw, source="CLAW_FEDERATION_DEFAULT_ROUTING_LABELS")
         for key, value in env_labels.items():

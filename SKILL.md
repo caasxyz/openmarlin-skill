@@ -133,6 +133,16 @@ Required:
 export CLAW_FEDERATION_SERVER_URL="http://127.0.0.1:3000"
 ```
 
+OpenClaw-persisted skill config is also supported. These helpers resolve
+required and default values from:
+
+1. process env
+2. `~/.openclaw/openclaw.json` under
+   `skills.entries["claw-federation-registration"].env`
+
+That means the user does not need to hand-edit config files as long as
+OpenClaw writes the skill config on their behalf.
+
 Optional direct API key override:
 
 ```bash

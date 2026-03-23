@@ -13,6 +13,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from openclaw_skill_config import get_skill_env
 from openclaw_platform_auth import (
     DEFAULT_AGENT_ID,
     DEFAULT_PROFILE_ID,
@@ -26,13 +27,14 @@ DEFAULT_API_KEY_LABEL = "OpenClaw bootstrap"
 
 
 def parse_args() -> argparse.Namespace:
+    default_server_url, _server_url_source = get_skill_env("CLAW_FEDERATION_SERVER_URL")
     parser = argparse.ArgumentParser(
         description="Create, inspect, and poll claw-federation registration sessions."
     )
     parser.add_argument(
         "--server-url",
-        default=os.environ.get("CLAW_FEDERATION_SERVER_URL", "").strip(),
-        help="Base URL for claw-federation-server. Defaults to CLAW_FEDERATION_SERVER_URL.",
+        default=(default_server_url or "").strip(),
+        help="Base URL for claw-federation-server. Defaults to CLAW_FEDERATION_SERVER_URL, then OpenClaw skill config.",
     )
     json_parent = argparse.ArgumentParser(add_help=False)
     json_parent.add_argument(
@@ -192,9 +194,9 @@ def build_browser_url(session: dict[str, Any]) -> str | None:
 
     template: str | None
     if handoff.get("type") == "device":
-        template = os.environ.get("CLAW_FEDERATION_WORKOS_DEVICE_URL_TEMPLATE")
+        template, _source = get_skill_env("CLAW_FEDERATION_WORKOS_DEVICE_URL_TEMPLATE")
     elif handoff.get("type") == "browser":
-        template = os.environ.get("CLAW_FEDERATION_WORKOS_CALLBACK_URL_TEMPLATE")
+        template, _source = get_skill_env("CLAW_FEDERATION_WORKOS_CALLBACK_URL_TEMPLATE")
     else:
         template = None
 
@@ -435,11 +437,8 @@ def watch_session(server_url: str, session_id: str, interval_seconds: float, tim
             )
         time.sleep(interval_seconds)
 
-
-args = parse_args()
-
-
 def main() -> int:
+    args = parse_args()
     server_url = require_server_url(args.server_url)
 
     if args.command == "create":
