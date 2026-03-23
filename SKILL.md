@@ -39,6 +39,7 @@ Use this skill when a user wants to create, connect, or resume a
 - When routing fails, explain the server-side reason in plain language.
 - Treat structured `402 Payment Required` as a guided recovery state, not a generic transport failure.
 - Keep 402 recovery inside OpenClaw until the required Stripe checkout step.
+- Keep billing state honest: use server-provided 402 balance snapshots and top-up session status, and clearly label any locally refreshed balance as last-known or estimated.
 
 ## Server Contract
 
@@ -99,6 +100,30 @@ structured `402` payload:
 - `required_balance.amount / unit`
 
 That 402 contract should drive recovery UX instead of generic error handling.
+
+For Stripe-backed top-up state, the public top-up contract is:
+
+- `POST /v1/topup/sessions`
+- `GET /v1/topup/sessions/:sessionId`
+
+Top-up sessions expose:
+
+- `topup_session_id`
+- `workspace_id`
+- `requested_amount.amount / unit`
+- `status = pending_payment | credit_applied | payment_failed`
+- `created_at`
+- `completed_at`
+- `stripe_reference`
+- `checkout_url`
+- `credited_ledger_entry_id`
+
+There is no separate public balance or ledger-list endpoint in this contract.
+Inside OpenClaw, balance management should therefore use:
+
+- the last server-provided structured `402` balance snapshot
+- tracked top-up session state for the current workspace
+- `credited_ledger_entry_id` to show when a Stripe-backed credit has landed
 
 ## Setup
 
@@ -212,6 +237,25 @@ Check or wait on a top-up session:
 ```bash
 python3 scripts/payment_recovery.py status --session-id <topup-session-id>
 python3 scripts/payment_recovery.py watch --session-id <topup-session-id>
+```
+
+Show the last known balance snapshot for a workspace:
+
+```bash
+python3 scripts/payment_recovery.py balance --workspace-id <workspace-id>
+```
+
+Refresh the stored balance snapshot directly from a structured 402 payload:
+
+```bash
+python3 scripts/payment_recovery.py balance \
+  --response-json '{"error_code":"insufficient_balance","message":"Workspace balance is insufficient for this request.","workspace_id":"ws_123","current_balance":{"amount":0,"unit":"credits"},"required_balance":{"amount":1,"unit":"credits"}}'
+```
+
+Show tracked top-up history from local OpenClaw billing state:
+
+```bash
+python3 scripts/payment_recovery.py history --workspace-id <workspace-id>
 ```
 
 Send an authenticated `/v1/responses` request to an explicitly selected
@@ -353,9 +397,25 @@ When the server returns a structured `402 insufficient_balance` response:
 - offer the next two actions inside OpenClaw:
   `python3 scripts/payment_recovery.py create-topup ...`
   `python3 scripts/payment_recovery.py watch --session-id <topup-session-id>`
+- persist the `current_balance` snapshot into OpenClaw billing state so later balance views have a server-sourced baseline
 - keep the browser handoff limited to the returned Stripe `checkout_url`
 
 Do not flatten this into “request failed” or “transport error”.
+
+## Top-up And Balance Guidance
+
+When guiding a user through top-up or billing state:
+
+- start from OpenClaw prompts or helper commands, not a website-first billing page
+- create the top-up session inside OpenClaw
+- show the distinction between:
+  `pending_payment`
+  `credit_applied`
+  `payment_failed`
+- when payment is still pending, tell the user the only external step is opening the Stripe `checkout_url`
+- when payment completes and `credited_ledger_entry_id` appears, show that the Stripe funding has been turned into a platform ledger credit
+- refresh the last known balance view after completion using the stored server balance baseline plus the completed top-up amount
+- if no prior server balance snapshot exists, be explicit that OpenClaw can confirm credit application but not exact current available balance
 
 When these happen, keep the explanation concrete:
 

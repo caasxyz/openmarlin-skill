@@ -13,6 +13,12 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from openclaw_billing_state import (
+    get_last_balance_snapshot,
+    list_topup_sessions,
+    record_balance_snapshot,
+    record_topup_session,
+)
 from openclaw_platform_auth import DEFAULT_AGENT_ID, DEFAULT_PROFILE_ID, resolve_platform_api_key
 
 
@@ -63,6 +69,15 @@ def parse_args() -> argparse.Namespace:
     create.add_argument("--amount", type=float, help="Requested top-up amount in credits.")
     create.add_argument("--response-json", help="Optional 402 response JSON used to derive a suggested amount.")
     create.add_argument("--response-file", help="Optional 402 response JSON file used to derive a suggested amount.")
+
+    balance = subparsers.add_parser("balance", help="Show the last known balance snapshot for a workspace.", parents=[common])
+    balance.add_argument("--workspace-id", help="Workspace ID. Defaults to the workspace from a supplied 402 response.")
+    balance.add_argument("--response-json", help="Optional structured 402 response JSON used to refresh the stored snapshot first.")
+    balance.add_argument("--response-file", help="Optional structured 402 response JSON file used to refresh the stored snapshot first.")
+
+    history = subparsers.add_parser("history", help="Show tracked top-up sessions for a workspace.", parents=[common])
+    history.add_argument("--workspace-id", help="Optional workspace ID filter.")
+    history.add_argument("--limit", type=int, default=10, help="Maximum sessions to show. Default: 10.")
 
     status = subparsers.add_parser("status", help="Fetch the current top-up session state.", parents=[common])
     status.add_argument("--session-id", required=True, help="Top-up session ID.")
@@ -200,6 +215,64 @@ def derive_topup_amount(args: argparse.Namespace) -> float:
     return amount if amount > 0 else summary["required_balance"]["amount"]
 
 
+def remember_402_summary(summary: dict[str, Any], *, agent_id: str) -> dict[str, Any]:
+    workspace_id = summary.get("workspace_id")
+    if not isinstance(workspace_id, str) or not workspace_id.strip():
+        raise SystemExit("Structured insufficient_balance payload is missing workspace_id.")
+    return record_balance_snapshot(
+        workspace_id=workspace_id,
+        amount=summary["current_balance"]["amount"],
+        unit=summary["current_balance"]["unit"],
+        agent_id=agent_id,
+        source="structured_402",
+        estimated=False,
+        message=summary.get("message"),
+        required_amount=summary["required_balance"]["amount"],
+        reference={"error_code": "insufficient_balance"},
+    )
+
+
+def update_balance_from_completed_topup(
+    session: dict[str, Any],
+    *,
+    agent_id: str,
+) -> dict[str, Any] | None:
+    if session.get("status") != "credit_applied":
+        return None
+
+    workspace_id = session.get("workspace_id")
+    requested_amount = session.get("requested_amount")
+    if not isinstance(workspace_id, str) or not isinstance(requested_amount, dict):
+        return None
+    amount = requested_amount.get("amount")
+    unit = requested_amount.get("unit")
+    if not isinstance(amount, (int, float)) or not isinstance(unit, str):
+        return None
+
+    previous_snapshot, _state_path = get_last_balance_snapshot(workspace_id=workspace_id, agent_id=agent_id)
+    if not previous_snapshot:
+        return None
+    previous_amount = previous_snapshot.get("amount")
+    previous_unit = previous_snapshot.get("unit")
+    if not isinstance(previous_amount, (int, float)) or previous_unit != unit:
+        return None
+
+    return record_balance_snapshot(
+        workspace_id=workspace_id,
+        amount=float(previous_amount) + float(amount),
+        unit=unit,
+        agent_id=agent_id,
+        source="topup_session_credit_applied",
+        estimated=bool(previous_snapshot.get("estimated")),
+        message="Updated from a completed Stripe top-up session.",
+        reference={
+            "topup_session_id": session.get("topup_session_id"),
+            "credited_ledger_entry_id": session.get("credited_ledger_entry_id"),
+            "base_observed_at": previous_snapshot.get("observed_at"),
+        },
+    )
+
+
 def print_402_summary(summary: dict[str, Any]) -> None:
     print(summary.get("message") or "Workspace balance is insufficient for this request.")
     print(f"Workspace ID: {summary.get('workspace_id', '<unknown>')}")
@@ -232,6 +305,41 @@ def print_topup_session(payload: dict[str, Any]) -> None:
     print("Next step: open the checkout URL only for the Stripe payment step, then return to OpenClaw and watch the session.")
 
 
+def print_balance_snapshot(snapshot: dict[str, Any], state_path: str) -> None:
+    print(f"Workspace ID: {snapshot.get('workspace_id', '<unknown>')}")
+    print(f"Last known balance: {snapshot.get('amount', '<unknown>')} {snapshot.get('unit', '<unknown>')}")
+    print(f"Observed at: {snapshot.get('observed_at', '<unknown>')}")
+    print(f"Source: {snapshot.get('source', '<unknown>')}")
+    print(f"Estimated: {'yes' if snapshot.get('estimated') else 'no'}")
+    required_amount = snapshot.get("required_amount")
+    if required_amount is not None:
+        print(f"Required balance from last 402: {required_amount} {snapshot.get('unit', '<unknown>')}")
+    message = snapshot.get("message")
+    if message:
+        print(f"Message: {message}")
+    print(f"Billing state path: {state_path}")
+
+
+def print_history(sessions: list[dict[str, Any]], state_path: str) -> None:
+    print(f"Billing state path: {state_path}")
+    if not sessions:
+        print("Tracked top-up sessions: none")
+        return
+    print("Tracked top-up sessions:")
+    for session in sessions:
+        amount = session.get("requested_amount")
+        rendered_amount = "<unknown>"
+        if isinstance(amount, dict):
+            rendered_amount = f"{amount.get('amount', '<unknown>')} {amount.get('unit', '<unknown>')}"
+        print(
+            f"- {session.get('topup_session_id', '<unknown>')} "
+            f"workspace={session.get('workspace_id', '<unknown>')} "
+            f"status={session.get('status', '<unknown>')} "
+            f"amount={rendered_amount} "
+            f"credited_ledger_entry_id={session.get('credited_ledger_entry_id', '<unknown>')}"
+        )
+
+
 def main() -> int:
     args = parse_args()
 
@@ -240,10 +348,52 @@ def main() -> int:
         summary = parse_insufficient_balance(payload)
         if not summary:
             raise SystemExit("The provided response is not a structured insufficient_balance payload.")
+        stored = remember_402_summary(summary, agent_id=args.agent_id)
         if args.json:
-            print(json.dumps({"recovery": summary, "commands": build_recovery_commands(summary)}, indent=2, sort_keys=True))
+            print(
+                json.dumps(
+                    {
+                        "recovery": summary,
+                        "commands": build_recovery_commands(summary),
+                        "stored": stored,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
         else:
             print_402_summary(summary)
+            print(f"Saved billing snapshot to: {stored['billing_state_path']}")
+        return 0
+
+    if args.command == "balance":
+        summary = None
+        if args.response_json or args.response_file:
+            payload = load_json_object_from_option(args.response_json, args.response_file, source_name="response")
+            summary = parse_insufficient_balance(payload)
+            if not summary:
+                raise SystemExit("The provided response is not a structured insufficient_balance payload.")
+            remember_402_summary(summary, agent_id=args.agent_id)
+
+        workspace_id = args.workspace_id or (summary.get("workspace_id") if summary else None)
+        if not workspace_id:
+            raise SystemExit("Missing workspace ID. Pass --workspace-id or provide a structured 402 response.")
+        snapshot, state_path = get_last_balance_snapshot(workspace_id=workspace_id, agent_id=args.agent_id)
+        if not snapshot:
+            raise SystemExit(f"No stored balance snapshot for workspace {workspace_id}.")
+        if args.json:
+            print(json.dumps({"ok": True, "billing_state_path": state_path, "balance": snapshot}, indent=2, sort_keys=True))
+        else:
+            print_balance_snapshot(snapshot, state_path)
+        return 0
+
+    if args.command == "history":
+        sessions, state_path = list_topup_sessions(workspace_id=args.workspace_id, agent_id=args.agent_id)
+        sessions = sessions[: max(args.limit, 0)]
+        if args.json:
+            print(json.dumps({"ok": True, "billing_state_path": state_path, "sessions": sessions}, indent=2, sort_keys=True))
+        else:
+            print_history(sessions, state_path)
         return 0
 
     server_url = require_non_empty(
@@ -296,10 +446,26 @@ def main() -> int:
         return 1
 
     if args.json:
-        print(json.dumps({"ok": True, "status": status, "api_key_source": api_key_source, "response": payload}, indent=2, sort_keys=True))
+        structured: dict[str, Any] = {"ok": True, "status": status, "api_key_source": api_key_source, "response": payload}
+        if isinstance(payload, dict):
+            stored_session = record_topup_session(session=payload, agent_id=args.agent_id)
+            structured["stored_session"] = stored_session
+            refreshed_balance = update_balance_from_completed_topup(payload, agent_id=args.agent_id)
+            if refreshed_balance:
+                structured["refreshed_balance"] = refreshed_balance
+        print(json.dumps(structured, indent=2, sort_keys=True))
     else:
         if isinstance(payload, dict):
+            record_topup_session(session=payload, agent_id=args.agent_id)
+            refreshed_balance = update_balance_from_completed_topup(payload, agent_id=args.agent_id)
             print_topup_session(payload)
+            if refreshed_balance:
+                snapshot = refreshed_balance["snapshot"]
+                print(
+                    "Refreshed last known balance: "
+                    f"{snapshot['amount']} {snapshot['unit']} "
+                    f"(estimated={'yes' if snapshot['estimated'] else 'no'})"
+                )
         else:
             print(payload)
 

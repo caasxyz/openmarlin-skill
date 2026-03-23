@@ -12,6 +12,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from openclaw_billing_state import record_balance_snapshot
 from openclaw_platform_auth import DEFAULT_AGENT_ID, DEFAULT_PROFILE_ID, resolve_platform_api_key
 from payment_recovery import build_recovery_commands, parse_insufficient_balance
 
@@ -318,6 +319,19 @@ def main() -> int:
     if status >= 400:
         message = explain_error(status, payload, provider, labels)
         recovery = parse_insufficient_balance(payload) if isinstance(payload, dict) else None
+        stored_balance = None
+        if recovery and isinstance(recovery.get("workspace_id"), str) and recovery["workspace_id"].strip():
+            stored_balance = record_balance_snapshot(
+                workspace_id=recovery["workspace_id"],
+                amount=recovery["current_balance"]["amount"],
+                unit=recovery["current_balance"]["unit"],
+                agent_id=args.agent_id,
+                source="structured_402",
+                estimated=False,
+                message=recovery.get("message"),
+                required_amount=recovery["required_balance"]["amount"],
+                reference={"error_code": "insufficient_balance"},
+            )
         if args.json:
             print(
                 json.dumps(
@@ -330,6 +344,7 @@ def main() -> int:
                         "response": payload,
                         "message": message,
                         **({"recovery": recovery, "commands": build_recovery_commands(recovery)} if recovery else {}),
+                        **({"stored_balance": stored_balance} if stored_balance else {}),
                     },
                     indent=2,
                     sort_keys=True,
@@ -337,6 +352,8 @@ def main() -> int:
             )
         else:
             print(message, file=sys.stderr)
+            if stored_balance:
+                print(f"Saved billing snapshot to: {stored_balance['billing_state_path']}", file=sys.stderr)
         return 1
 
     if args.json:

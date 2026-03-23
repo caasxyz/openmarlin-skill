@@ -11,4 +11,5 @@ Primary entrypoints:
 - `scripts/platform_request.py` for explicit provider selection, routing hints,
   and authenticated `/invoke` or `/v1/responses` platform requests
 - `scripts/payment_recovery.py` for structured 402 recovery guidance and
-  authenticated top-up session handling
+  authenticated top-up session handling, local balance snapshots, and tracked
+  top-up history
