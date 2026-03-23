@@ -1,13 +1,17 @@
 ---
 name: claw-federation-registration
-description: "Guide platform registration and account linking for claw-federation in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect, or resume linking a claw-federation platform account. NOT for: collecting passwords in chat, issuing API keys, or website-first onboarding."
+description: "Guide platform registration, account linking, and explicit provider routing for claw-federation in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, or send a platform request to a specific provider with simple routing hints. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
 metadata:
   {
     "openclaw":
       {
         "emoji": "🦞",
         "skillKey": "claw-federation-registration",
-        "requires": { "bins": ["python3"], "env": ["CLAW_FEDERATION_SERVER_URL"] },
+        "requires":
+          {
+            "bins": ["python3"],
+            "env": ["CLAW_FEDERATION_SERVER_URL", "CLAW_FEDERATION_PLATFORM_API_KEY"],
+          },
         "primaryEnv": "CLAW_FEDERATION_SERVER_URL",
       },
   }
@@ -29,6 +33,10 @@ Use this skill when a user wants to create, connect, or resume a
 - After handoff begins, keep polling or resuming in OpenClaw until the session
   becomes `completed` or `expired`.
 - Treat browser use as a narrow identity step, not the main control plane.
+- For platform requests, prefer explicit provider selection first.
+- Surface only simple routing hints such as `region=ap-sg` or `tier=premium`.
+- Do not invent hidden routing labels or pretend to bypass server validation.
+- When routing fails, explain the server-side reason in plain language.
 
 ## Server Contract
 
@@ -85,6 +93,7 @@ Required:
 
 ```bash
 export CLAW_FEDERATION_SERVER_URL="http://127.0.0.1:3000"
+export CLAW_FEDERATION_PLATFORM_API_KEY="claw_wsk_..."
 ```
 
 Optional browser-handoff templates:
@@ -99,6 +108,13 @@ Template placeholders:
 - `{device_code}`
 - `{callback_state}`
 - `{registration_session_id}`
+
+Optional request-routing defaults:
+
+```bash
+export CLAW_FEDERATION_DEFAULT_PROVIDER_ID="node-a"
+export CLAW_FEDERATION_DEFAULT_ROUTING_LABELS='{"region":"ap-sg"}'
+```
 
 If no browser template is configured, keep the user in OpenClaw, surface the
 device code or callback state, and explain that the deployment-specific WorkOS
@@ -146,6 +162,34 @@ Wait for completion and immediately issue the key:
 
 ```bash
 python3 scripts/registration_session.py bootstrap --session-id <session-id>
+```
+
+Send an authenticated `/v1/responses` request to an explicitly selected
+provider:
+
+```bash
+python3 scripts/platform_request.py responses \
+  --provider node-a \
+  --body-json '{"model":"openai-codex/gpt-5.4","input":"say hello"}'
+```
+
+Send a request with simple routing hints:
+
+```bash
+python3 scripts/platform_request.py responses \
+  --provider node-a \
+  --label region=ap-sg \
+  --label tier=premium \
+  --body-json '{"model":"openai-codex/gpt-5.4","input":"summarize this"}'
+```
+
+Invoke a registered remote skill with explicit provider selection:
+
+```bash
+python3 scripts/platform_request.py invoke \
+  --skill demo.echo \
+  --provider node-a \
+  --input-json '{"text":"hello"}'
 ```
 
 ## Recommended Playbook
@@ -206,3 +250,48 @@ The returned `secret` is the steady-state platform credential for OpenClaw.
   committed workspace content
 - if you only need to hand it off manually, use process env or operator-managed
   secret storage rather than chat history when possible
+
+## Provider Routing UX
+
+The platform routing model is explicit-provider-first.
+
+Preferred user-facing controls:
+
+- explicit `provider_id` when the user knows the target node
+- optional simple labels expressed as `key=value`
+- env-based defaults when the same provider or routing hint should persist
+  across repeated requests
+
+Good examples:
+
+- "send this to provider `node-a`"
+- "use `node-a` in `region=ap-sg`"
+- "default to provider `node-b` for this workspace session"
+
+Avoid exposing low-level policy internals. Keep the UX to:
+
+- provider choice
+- a small number of understandable labels
+- clear explanations when the server rejects the route
+
+## Routing Failure Guidance
+
+Translate common server responses into plain language:
+
+- `provider_unavailable`: the selected provider is not currently connected
+- `provider_label_mismatch`: the provider does not satisfy the requested routing
+  hints
+- `skill_not_available_on_provider`: that provider does not expose the requested
+  skill
+- `skill_not_available`: no connected provider currently exposes that skill
+- `llm_api_not_available`: the provider is connected but does not forward the
+  `responses` API
+- `llm_model_not_allowed`: the requested model is outside the provider allowlist
+- `invalid_routing_labels`: the label hints were not valid JSON or `key=value`
+  pairs
+
+When these happen, keep the explanation concrete:
+
+- restate the provider and labels you actually sent
+- say whether the user should retry with a different provider, different labels,
+  or no labels
