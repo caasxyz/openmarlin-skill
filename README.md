@@ -9,7 +9,7 @@ This repo covers the OpenClaw-first UX for:
 - platform API key bootstrap and auth-profile storage
 - explicit provider selection and routing hints
 - structured `402 Payment Required` recovery
-- guided top-up and last-known balance management
+- guided top-up and authoritative balance management
 
 Primary entrypoints:
 
@@ -19,7 +19,8 @@ Primary entrypoints:
 - `scripts/platform_request.py` for explicit provider selection, routing hints,
   and authenticated `/invoke` or `/v1/responses` platform requests
 - `scripts/payment_recovery.py` for structured 402 recovery guidance and
-  authenticated top-up session handling, local balance snapshots, and tracked
+  authenticated top-up session handling, authoritative balance reads, local
+  balance snapshots, and tracked
   top-up history
 
 Internal helpers:

@@ -72,10 +72,14 @@ def parse_args() -> argparse.Namespace:
     create.add_argument("--response-json", help="Optional 402 response JSON used to derive a suggested amount.")
     create.add_argument("--response-file", help="Optional 402 response JSON file used to derive a suggested amount.")
 
-    balance = subparsers.add_parser("balance", help="Show the last known balance snapshot for a workspace.", parents=[common])
-    balance.add_argument("--workspace-id", help="Workspace ID. Defaults to the workspace from a supplied 402 response.")
-    balance.add_argument("--response-json", help="Optional structured 402 response JSON used to refresh the stored snapshot first.")
-    balance.add_argument("--response-file", help="Optional structured 402 response JSON file used to refresh the stored snapshot first.")
+    balance = subparsers.add_parser(
+        "balance",
+        help="Show the authoritative current balance for the authenticated workspace.",
+        parents=[common],
+    )
+    balance.add_argument("--workspace-id", help="Optional workspace ID used only for local fallback context.")
+    balance.add_argument("--response-json", help="Optional structured 402 response JSON used to refresh local context first.")
+    balance.add_argument("--response-file", help="Optional structured 402 response JSON file used to refresh local context first.")
 
     history = subparsers.add_parser("history", help="Show tracked top-up sessions for a workspace.", parents=[common])
     history.add_argument("--workspace-id", help="Optional workspace ID filter.")
@@ -167,6 +171,30 @@ def request_json(url: str, method: str = "GET", headers: dict[str, str] | None =
         raise SystemExit(f"Request failed for {method} {url}: {error.reason}") from error
 
 
+def parse_workspace_balance(payload: dict[str, Any]) -> dict[str, Any] | None:
+    workspace_id = payload.get("workspace_id")
+    available = payload.get("available_balance")
+    updated_at = payload.get("updated_at")
+    if not isinstance(workspace_id, str) or not isinstance(available, dict):
+        return None
+
+    amount = available.get("amount")
+    unit = available.get("unit")
+    if not isinstance(amount, (int, float)) or not isinstance(unit, str):
+        return None
+    if updated_at is not None and not isinstance(updated_at, str):
+        return None
+
+    return {
+        "workspace_id": workspace_id,
+        "available_balance": {
+            "amount": float(amount),
+            "unit": unit,
+        },
+        "updated_at": updated_at,
+    }
+
+
 def parse_insufficient_balance(payload: dict[str, Any]) -> dict[str, Any] | None:
     if payload.get("error_code") != "insufficient_balance":
         return None
@@ -232,6 +260,23 @@ def remember_402_summary(summary: dict[str, Any], *, agent_id: str) -> dict[str,
         required_amount=summary["required_balance"]["amount"],
         reference={"error_code": "insufficient_balance"},
     )
+
+
+def remember_authoritative_balance(balance: dict[str, Any], *, agent_id: str) -> dict[str, Any]:
+    return record_balance_snapshot(
+        workspace_id=balance["workspace_id"],
+        amount=balance["available_balance"]["amount"],
+        unit=balance["available_balance"]["unit"],
+        agent_id=agent_id,
+        source="authoritative_balance_api",
+        estimated=False,
+        message="Fetched from GET /v1/balance.",
+        reference={"updated_at": balance.get("updated_at")},
+    )
+
+
+def fetch_authoritative_balance(server_url: str, auth_headers: dict[str, str]) -> tuple[int, dict[str, Any] | str]:
+    return request_json(f"{server_url}/v1/balance", headers=auth_headers)
 
 
 def update_balance_from_completed_topup(
@@ -309,10 +354,14 @@ def print_topup_session(payload: dict[str, Any]) -> None:
 
 def print_balance_snapshot(snapshot: dict[str, Any], state_path: str) -> None:
     print(f"Workspace ID: {snapshot.get('workspace_id', '<unknown>')}")
-    print(f"Last known balance: {snapshot.get('amount', '<unknown>')} {snapshot.get('unit', '<unknown>')}")
+    label = "Authoritative balance" if snapshot.get("source") == "authoritative_balance_api" else "Last known balance"
+    print(f"{label}: {snapshot.get('amount', '<unknown>')} {snapshot.get('unit', '<unknown>')}")
     print(f"Observed at: {snapshot.get('observed_at', '<unknown>')}")
     print(f"Source: {snapshot.get('source', '<unknown>')}")
     print(f"Estimated: {'yes' if snapshot.get('estimated') else 'no'}")
+    updated_at = (snapshot.get("reference") or {}).get("updated_at")
+    if updated_at:
+        print(f"Server updated at: {updated_at}")
     required_amount = snapshot.get("required_amount")
     if required_amount is not None:
         print(f"Required balance from last 402: {required_amount} {snapshot.get('unit', '<unknown>')}")
@@ -376,17 +425,73 @@ def main() -> int:
             if not summary:
                 raise SystemExit("The provided response is not a structured insufficient_balance payload.")
             remember_402_summary(summary, agent_id=args.agent_id)
+        server_url = require_non_empty(
+            args.server_url,
+            "Missing server URL. Set CLAW_FEDERATION_SERVER_URL or pass --server-url.",
+        ).rstrip("/")
+        api_key, api_key_source = resolve_api_key_or_exit(args.api_key, args.profile_id, args.agent_id)
+        auth_headers = {"Authorization": f"Bearer {api_key}"}
 
-        workspace_id = args.workspace_id or (summary.get("workspace_id") if summary else None)
-        if not workspace_id:
-            raise SystemExit("Missing workspace ID. Pass --workspace-id or provide a structured 402 response.")
-        snapshot, state_path = get_last_balance_snapshot(workspace_id=workspace_id, agent_id=args.agent_id)
-        if not snapshot:
-            raise SystemExit(f"No stored balance snapshot for workspace {workspace_id}.")
+        status, payload = fetch_authoritative_balance(server_url, auth_headers)
+        fallback_workspace_id = args.workspace_id or (summary.get("workspace_id") if summary else None)
+        fallback_snapshot = None
+        fallback_state_path = None
+        if fallback_workspace_id:
+            fallback_snapshot, fallback_state_path = get_last_balance_snapshot(
+                workspace_id=fallback_workspace_id,
+                agent_id=args.agent_id,
+            )
+
+        if status >= 400:
+            if fallback_snapshot:
+                if args.json:
+                    print(
+                        json.dumps(
+                            {
+                                "ok": False,
+                                "status": status,
+                                "api_key_source": api_key_source,
+                                "response": payload,
+                                "fallback_balance": fallback_snapshot,
+                                "billing_state_path": fallback_state_path,
+                            },
+                            indent=2,
+                            sort_keys=True,
+                        )
+                    )
+                else:
+                    print(f"Unable to fetch authoritative balance (HTTP {status}). Showing local fallback.", file=sys.stderr)
+                    print_balance_snapshot(fallback_snapshot, fallback_state_path or "<unknown>")
+                return 1
+            if args.json:
+                print(json.dumps({"ok": False, "status": status, "api_key_source": api_key_source, "response": payload}, indent=2, sort_keys=True))
+            else:
+                raise SystemExit(f"Unable to fetch authoritative balance (HTTP {status}): {payload}")
+            return 1
+
+        if not isinstance(payload, dict):
+            raise SystemExit("Server returned a non-object payload for GET /v1/balance.")
+        balance = parse_workspace_balance(payload)
+        if not balance:
+            raise SystemExit("Server returned an invalid workspace balance payload.")
+        stored = remember_authoritative_balance(balance, agent_id=args.agent_id)
         if args.json:
-            print(json.dumps({"ok": True, "billing_state_path": state_path, "balance": snapshot}, indent=2, sort_keys=True))
+            print(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "status": status,
+                        "api_key_source": api_key_source,
+                        "response": payload,
+                        "billing_state_path": stored["billing_state_path"],
+                        "balance": stored["snapshot"],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
         else:
-            print_balance_snapshot(snapshot, state_path)
+            print_balance_snapshot(stored["snapshot"], stored["billing_state_path"])
         return 0
 
     if args.command == "history":
@@ -452,19 +557,37 @@ def main() -> int:
         if isinstance(payload, dict):
             stored_session = record_topup_session(session=payload, agent_id=args.agent_id)
             structured["stored_session"] = stored_session
-            refreshed_balance = update_balance_from_completed_topup(payload, agent_id=args.agent_id)
+            refreshed_balance = None
+            if payload.get("status") == "credit_applied":
+                balance_status, balance_payload = fetch_authoritative_balance(server_url, auth_headers)
+                if balance_status < 400 and isinstance(balance_payload, dict):
+                    authoritative_balance = parse_workspace_balance(balance_payload)
+                    if authoritative_balance:
+                        refreshed_balance = remember_authoritative_balance(authoritative_balance, agent_id=args.agent_id)
+                        structured["authoritative_balance_status"] = balance_status
+                        structured["authoritative_balance_response"] = balance_payload
+                if not refreshed_balance:
+                    refreshed_balance = update_balance_from_completed_topup(payload, agent_id=args.agent_id)
             if refreshed_balance:
                 structured["refreshed_balance"] = refreshed_balance
         print(json.dumps(structured, indent=2, sort_keys=True))
     else:
         if isinstance(payload, dict):
             record_topup_session(session=payload, agent_id=args.agent_id)
-            refreshed_balance = update_balance_from_completed_topup(payload, agent_id=args.agent_id)
+            refreshed_balance = None
+            if payload.get("status") == "credit_applied":
+                balance_status, balance_payload = fetch_authoritative_balance(server_url, auth_headers)
+                if balance_status < 400 and isinstance(balance_payload, dict):
+                    authoritative_balance = parse_workspace_balance(balance_payload)
+                    if authoritative_balance:
+                        refreshed_balance = remember_authoritative_balance(authoritative_balance, agent_id=args.agent_id)
+                if not refreshed_balance:
+                    refreshed_balance = update_balance_from_completed_topup(payload, agent_id=args.agent_id)
             print_topup_session(payload)
             if refreshed_balance:
                 snapshot = refreshed_balance["snapshot"]
                 print(
-                    "Refreshed last known balance: "
+                    "Refreshed balance: "
                     f"{snapshot['amount']} {snapshot['unit']} "
                     f"(estimated={'yes' if snapshot['estimated'] else 'no'})"
                 )
