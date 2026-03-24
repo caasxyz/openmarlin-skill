@@ -122,7 +122,9 @@ writing skill config through its normal settings or `skills.update` flow.
 
 For browser handoff during registration, the skill now expects the server to
 return `handoff.authorization_url` directly. It no longer relies on locally
-configured WorkOS URL templates.
+configured WorkOS URL templates. When `registration_session.py create` gets an
+authorization URL back, it now tries to open that URL in the system browser
+automatically and then tells the user how to continue polling in OpenClaw.
 
 ## First Run
 

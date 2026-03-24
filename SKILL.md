@@ -171,6 +171,10 @@ Create a default device-style session:
 python3 scripts/registration_session.py create
 ```
 
+When the server returns `handoff.authorization_url`, this command should
+attempt to open it in the system browser automatically, then print the session
+ID, any device code, and the `watch` command to continue in OpenClaw.
+
 Create an explicit callback/browser session:
 
 ```bash
@@ -308,7 +312,8 @@ python3 scripts/platform_request.py invoke \
 3. Create the session with
    `python3 scripts/registration_session.py create`.
 4. Present only the minimum external-auth instructions:
-   - if a device URL is available, open or show it with the device code
+   - if an authorization URL is available, auto-open it and also show it in output
+   - if a device code is present, print it clearly alongside the browser step
    - otherwise show the device code and explain the platform operator must
      provide the verification URL
 5. Continue polling with `watch` and keep the conversation in OpenClaw.

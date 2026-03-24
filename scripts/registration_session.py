@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
+import subprocess
 import sys
 import time
 import urllib.error
@@ -191,6 +193,40 @@ def build_browser_url(session: dict[str, Any]) -> str | None:
     return authorization_url.strip()
 
 
+def auto_open_browser_url(browser_url: str) -> tuple[bool, str]:
+    system = platform.system().lower()
+    try:
+        if system == "darwin":
+            completed = subprocess.run(
+                ["open", browser_url],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        elif system == "windows":
+            os.startfile(browser_url)  # type: ignore[attr-defined]
+            return True, "Opened the authorization page in your default browser."
+        else:
+            completed = subprocess.run(
+                ["xdg-open", browser_url],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+    except FileNotFoundError as error:
+        return False, f"Could not auto-open the browser because the opener is missing: {error.filename}"
+    except OSError as error:
+        return False, f"Could not auto-open the browser: {error}"
+
+    if completed.returncode == 0:
+        return True, "Opened the authorization page in your default browser."
+
+    detail = (completed.stderr or completed.stdout or "").strip()
+    if detail:
+        return False, f"Could not auto-open the browser: {detail}"
+    return False, "Could not auto-open the browser."
+
+
 def completion_summary(session: dict[str, Any]) -> list[str]:
     completion = session.get("completion")
     if not isinstance(completion, dict):
@@ -262,6 +298,32 @@ def print_session(session: dict[str, Any]) -> None:
             print(f"  {line}")
     elif session.get("state") == "pending_external_auth":
         print("Completion: waiting for external auth")
+
+
+def print_create_next_steps(session: dict[str, Any]) -> None:
+    if session.get("state") != "pending_external_auth":
+        return
+
+    browser_url = build_browser_url(session)
+    handoff = session.get("handoff")
+
+    if browser_url:
+        opened, message = auto_open_browser_url(browser_url)
+        print(message)
+        if not opened:
+            print(f"Open this URL manually: {browser_url}")
+    elif isinstance(handoff, dict) and handoff.get("device_code"):
+        print("No browser URL was provided by the server.")
+
+    if isinstance(handoff, dict):
+        device_code = handoff.get("device_code")
+        if isinstance(device_code, str) and device_code:
+            print(f"Use device code: {device_code}")
+
+    session_id = session.get("registration_session_id")
+    if isinstance(session_id, str) and session_id:
+        print(f"Continue in OpenClaw with: python3 scripts/registration_session.py watch --session-id {session_id}")
+        print('After completing the browser step, say "done" or run the watch command above.')
 
 
 def build_api_key_issue_payload(session: dict[str, Any], label: str | None) -> dict[str, Any]:
@@ -484,6 +546,8 @@ def main() -> int:
             print(json.dumps(session, indent=2, sort_keys=True))
         else:
             print_session(session)
+            if args.command == "create":
+                print_create_next_steps(session)
 
     return 3 if args.command in {"create", "status", "watch"} and session.get("state") == "expired" else 0
 
