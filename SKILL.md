@@ -180,6 +180,56 @@ If the server does not return `handoff.authorization_url`, keep the user in
 OpenClaw, surface the device code or callback state, and explain that the
 deployment is missing the required server-side WorkOS handoff URL contract.
 
+## Definition Of Done
+
+Registration or account-link is done only when all of these are true:
+
+- the registration session reached `completed`
+- the user has the linked account and workspace context
+- the user has either the next bootstrap command or the issued-key result, depending on where the flow stopped
+
+At handoff, tell the user:
+
+- whether this was a new account or a linked existing account
+- the `account_id` and workspace identity the server returned
+- whether the next step is API key bootstrap or whether bootstrap already happened
+
+Platform API key bootstrap is done only when all of these are true:
+
+- the server issued the initial platform API key successfully
+- the skill reported where the key came from and where it was stored
+- if `--store` was used, the key landed in OpenClaw auth-profile storage and later requests can load it without asking the user to paste it again
+
+At handoff, tell the user:
+
+- whether the key was only issued or also stored
+- the storage location or source label, not the raw secret by default
+- the next concrete command they can run with the stored credential
+
+Structured `402` recovery is done only when all of these are true:
+
+- the user can see the shortfall in plain language
+- the user has an actionable next step inside OpenClaw
+- if a top-up session was created, the checkout URL and session state are preserved for resume or watch
+
+At handoff, tell the user:
+
+- the current balance, required balance, and shortfall if the server provided them
+- whether a top-up session was created automatically or still needs to be created
+- that Stripe checkout is the only required external step
+
+Balance recovery after payment is done only when all of these are true:
+
+- the top-up session reached `credit_applied`
+- the resulting `credited_ledger_entry_id` is surfaced when available
+- the skill refreshed or reported the best available post-payment balance view
+
+At handoff, tell the user:
+
+- whether the payment is still pending, failed, or credited
+- the authoritative balance if it was refreshed from the server, otherwise that the shown balance is fallback context
+- the next safe action, such as retrying the original request
+
 ## Commands
 
 Create a default device-style session:
