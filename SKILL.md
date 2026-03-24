@@ -1,6 +1,6 @@
 ---
 name: claw-federation-registration
-description: "Guide platform registration, account linking, and explicit provider routing for claw-federation in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, or send a platform request to a specific provider with simple routing hints. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
+description: "Guide platform registration, account linking, and server-routed provider selection for claw-federation in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, or send a platform request with automatic routing, an explicit provider override, or simple routing hints. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
 metadata: {"openclaw":{"emoji":"🦞","skillKey":"claw-federation-registration","requires":{"bins":["python3"],"env":["CLAW_FEDERATION_SERVER_URL"]},"primaryEnv":"CLAW_FEDERATION_SERVER_URL"}}
 ---
 
@@ -20,7 +20,8 @@ Use this skill when a user wants to create, connect, or resume a
 - After handoff begins, keep polling or resuming in OpenClaw until the session
   becomes `completed` or `expired`.
 - Treat browser use as a narrow identity step, not the main control plane.
-- For platform requests, prefer explicit provider selection first.
+- For platform requests, prefer server-side automatic routing by default.
+- Use explicit provider selection as an override when the user really wants a specific node.
 - Surface only simple routing hints such as `region=ap-sg` or `tier=premium`.
 - Do not invent hidden routing labels or pretend to bypass server validation.
 - When routing fails, explain the server-side reason in plain language.
@@ -254,8 +255,16 @@ Show tracked top-up history from local OpenClaw billing state:
 python3 scripts/payment_recovery.py history --workspace-id <workspace-id>
 ```
 
-Send an authenticated `/v1/responses` request to an explicitly selected
-provider:
+Send an authenticated `/v1/responses` request and let the server route it
+automatically:
+
+```bash
+python3 scripts/platform_request.py responses \
+  --body-json '{"model":"openai-codex/gpt-5.4","input":"say hello"}'
+```
+
+Send an authenticated `/v1/responses` request with an explicit provider
+override:
 
 ```bash
 python3 scripts/platform_request.py responses \
@@ -263,17 +272,24 @@ python3 scripts/platform_request.py responses \
   --body-json '{"model":"openai-codex/gpt-5.4","input":"say hello"}'
 ```
 
-Send a request with simple routing hints:
+Send a request with simple routing hints and let the server narrow the route:
 
 ```bash
 python3 scripts/platform_request.py responses \
-  --provider node-a \
   --label region=ap-sg \
   --label tier=premium \
   --body-json '{"model":"openai-codex/gpt-5.4","input":"summarize this"}'
 ```
 
-Invoke a registered remote skill with explicit provider selection:
+Invoke a registered remote skill with automatic provider selection:
+
+```bash
+python3 scripts/platform_request.py invoke \
+  --skill demo.echo \
+  --input-json '{"text":"hello"}'
+```
+
+Invoke a registered remote skill with an explicit provider override:
 
 ```bash
 python3 scripts/platform_request.py invoke \
@@ -347,18 +363,21 @@ The returned `secret` is the steady-state platform credential for OpenClaw.
 
 ## Provider Routing UX
 
-The platform routing model is explicit-provider-first.
+The platform routing model is server-routed by default.
 
 Preferred user-facing controls:
 
+- no provider override when the user just wants the server to choose
 - explicit `provider_id` when the user knows the target node
 - optional simple labels expressed as `key=value`
-- env-based defaults when the same provider or routing hint should persist
+- env-based defaults when the same provider override or routing hint should persist
   across repeated requests
 
 Good examples:
 
+- "just send this normally"
 - "send this to provider `node-a`"
+- "use `region=ap-sg`"
 - "use `node-a` in `region=ap-sg`"
 - "default to provider `node-b` for this workspace session"
 
@@ -373,6 +392,10 @@ Avoid exposing low-level policy internals. Keep the UX to:
 Translate common server responses into plain language:
 
 - `provider_unavailable`: the selected provider is not currently connected
+- `provider_route_not_found`: the server could not find any eligible provider
+  for the requested model/labels/default route
+- `provider_route_ambiguous`: more than one provider matched and the server
+  needs narrower labels or an explicit provider override
 - `provider_label_mismatch`: the provider does not satisfy the requested routing
   hints
 - `skill_not_available_on_provider`: that provider does not expose the requested

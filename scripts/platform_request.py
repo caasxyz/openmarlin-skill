@@ -24,10 +24,11 @@ ERROR_HELP = {
     "api_key_inactive": "The platform API key is no longer active. Bootstrap a replacement key.",
     "workspace_missing": "The API key resolved, but its workspace no longer exists on the server.",
     "account_missing": "The API key resolved, but its owning account no longer exists on the server.",
-    "missing_federation_provider": "No explicit provider was supplied. Set --provider or CLAW_FEDERATION_DEFAULT_PROVIDER_ID.",
     "invalid_routing_labels": "Routing labels were invalid. Use repeated --label key=value flags or valid JSON in CLAW_FEDERATION_DEFAULT_ROUTING_LABELS.",
     "provider_unavailable": "The selected provider is not currently connected.",
     "provider_label_mismatch": "The selected provider does not satisfy the requested routing hints.",
+    "provider_route_not_found": "The server could not find any eligible provider for this request. Retry with different labels, a different model, or an explicit --provider override.",
+    "provider_route_ambiguous": "More than one eligible provider matched and the server could not choose automatically. Retry with narrower labels or an explicit --provider override.",
     "llm_api_not_available": "The selected provider is connected, but it does not expose the responses API.",
     "llm_model_not_allowed": "The requested model is not allowed by the selected provider.",
     "skill_not_available": "No connected provider currently exposes that skill.",
@@ -53,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     common.add_argument(
         "--provider",
         default=(default_provider or "").strip(),
-        help="Explicit provider target. Defaults to CLAW_FEDERATION_DEFAULT_PROVIDER_ID, then OpenClaw skill config.",
+        help="Optional explicit provider override. Defaults to CLAW_FEDERATION_DEFAULT_PROVIDER_ID, then OpenClaw skill config.",
     )
     common.add_argument(
         "--label",
@@ -78,7 +79,7 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser = argparse.ArgumentParser(
-        description="Send authenticated claw-federation platform requests with provider selection and routing hints.",
+        description="Send authenticated claw-federation platform requests with optional provider overrides and routing hints.",
         parents=[common],
     )
 
@@ -257,7 +258,10 @@ def explain_error(code: int, payload: dict[str, Any] | str, provider: str | None
 
 def print_success(command: str, provider: str, labels: dict[str, str] | None, payload: dict[str, Any] | str) -> None:
     print(f"Command: {command}")
-    print(f"Provider: {provider}")
+    if provider:
+        print(f"Provider override: {provider}")
+    else:
+        print("Provider override: <none; server-side automatic routing>")
     if labels:
         print(f"Routing labels: {json.dumps(labels, sort_keys=True)}")
     else:
@@ -276,18 +280,16 @@ def main() -> int:
         "Missing server URL. Set CLAW_FEDERATION_SERVER_URL or pass --server-url.",
     ).rstrip("/")
     api_key, api_key_source = resolve_api_key_or_exit(args.api_key, args.profile_id, args.agent_id)
-    provider = require_non_empty(
-        args.provider,
-        "Missing provider. Pass --provider or set CLAW_FEDERATION_DEFAULT_PROVIDER_ID.",
-    )
+    provider = args.provider.strip() or None
     labels = resolve_labels(args.label)
 
     if args.command == "responses":
         body = load_json_object_from_option(args.body_json, args.body_file, source_name="body")
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "x-federation-provider": provider,
         }
+        if provider:
+            headers["x-federation-provider"] = provider
         if labels:
             headers["x-federation-labels"] = json.dumps(labels, sort_keys=True)
         status, payload, response_headers = request(
@@ -305,8 +307,9 @@ def main() -> int:
         body = {
             "skill": args.skill,
             "input": input_payload,
-            "provider_id": provider,
         }
+        if provider:
+            body["provider_id"] = provider
         if labels:
             body["labels"] = labels
         status, payload, response_headers = request(

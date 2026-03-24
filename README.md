@@ -7,7 +7,7 @@ This repo covers the OpenClaw-first UX for:
 
 - registration and account linking
 - platform API key bootstrap and auth-profile storage
-- explicit provider selection and routing hints
+- server-side automatic routing with optional provider overrides
 - structured `402 Payment Required` recovery
 - guided top-up and authoritative balance management
 
@@ -16,8 +16,9 @@ Primary entrypoints:
 - `SKILL.md` for OpenClaw skill behavior and operator guidance
 - `scripts/registration_session.py` for creating, polling, resuming, and
   bootstrapping workspace API keys after registration
-- `scripts/platform_request.py` for explicit provider selection, routing hints,
-  and authenticated `/invoke` or `/v1/responses` platform requests
+- `scripts/platform_request.py` for authenticated `/invoke` or `/v1/responses`
+  requests with server-side automatic routing, optional provider overrides, and
+  routing hints
 - `scripts/payment_recovery.py` for structured 402 recovery guidance and
   authenticated top-up session handling, authoritative balance reads, local
   balance snapshots, and tracked
@@ -129,7 +130,7 @@ Once installed, common entrypoints are:
 
 ```bash
 python3 scripts/registration_session.py create
-python3 scripts/platform_request.py responses --provider node-a --body-json '{"model":"openai-codex/gpt-5.4","input":"hello"}'
+python3 scripts/platform_request.py responses --body-json '{"model":"openai-codex/gpt-5.4","input":"hello"}'
 python3 scripts/payment_recovery.py explain-402 --response-file /path/to/402.json
 ```
 
