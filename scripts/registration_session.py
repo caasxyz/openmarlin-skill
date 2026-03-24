@@ -15,8 +15,12 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from openclaw_skill_config import get_skill_env
-from openclaw_skill_config import build_server_connection_error, require_server_url
+from openclaw_skill_config import (
+    build_server_connection_error,
+    get_skill_env,
+    probe_server_openapi,
+    require_server_url,
+)
 from openclaw_platform_auth import (
     DEFAULT_AGENT_ID,
     DEFAULT_PROFILE_ID,
@@ -30,10 +34,11 @@ DEFAULT_API_KEY_LABEL = "OpenClaw bootstrap"
 
 
 def parse_args() -> argparse.Namespace:
-    default_server_url, _server_url_source = get_skill_env("CLAW_FEDERATION_SERVER_URL")
+    default_server_url, server_url_source = get_skill_env("CLAW_FEDERATION_SERVER_URL")
     parser = argparse.ArgumentParser(
         description="Create, inspect, and poll claw-federation registration sessions."
     )
+    parser.set_defaults(_server_url_source=server_url_source)
     parser.add_argument(
         "--server-url",
         default=(default_server_url or "").strip(),
@@ -44,6 +49,11 @@ def parse_args() -> argparse.Namespace:
         "--json",
         action="store_true",
         help="Print raw JSON only.",
+    )
+    json_parent.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show resolved configuration and a lightweight connectivity check without executing the command.",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -153,6 +163,36 @@ def parse_args() -> argparse.Namespace:
     )
 
     return parser.parse_args()
+
+
+def print_dry_run(args: argparse.Namespace, server_url: str) -> int:
+    reachable, detail = probe_server_openapi(server_url)
+    payload = {
+        "ok": reachable,
+        "dry_run": True,
+        "command": args.command,
+        "server_url": server_url,
+        "server_url_source": args.server_url and (args._server_url_source or "flag-or-arg"),
+        "connectivity": detail,
+    }
+    if args.command == "create":
+        payload["auth_flow"] = args.auth_flow
+    elif hasattr(args, "session_id"):
+        payload["session_id"] = args.session_id
+
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print("Dry run only. No registration session action was executed.")
+        print(f"Command: {args.command}")
+        print(f"Resolved server URL: {server_url}")
+        print(f"Server URL source: {payload['server_url_source']}")
+        print(f"Connectivity check: {detail}")
+        if args.command == "create":
+            print(f"Auth flow: {args.auth_flow}")
+        elif "session_id" in payload:
+            print(f"Session ID: {payload['session_id']}")
+    return 0 if reachable else 1
 
 def request_json(url: str, method: str = "GET", payload: dict[str, Any] | None = None) -> dict[str, Any]:
     body = None
@@ -478,6 +518,8 @@ def watch_session(server_url: str, session_id: str, interval_seconds: float, tim
 def main() -> int:
     args = parse_args()
     server_url = require_server_url(args.server_url)
+    if args.dry_run:
+        return print_dry_run(args, server_url)
 
     if args.command == "create":
         session = create_session(server_url, args.auth_flow)

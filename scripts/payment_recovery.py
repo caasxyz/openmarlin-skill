@@ -16,6 +16,7 @@ from typing import Any
 from openclaw_skill_config import (
     build_server_connection_error,
     get_skill_env,
+    probe_server_openapi,
     require_server_url,
 )
 from openclaw_billing_state import (
@@ -32,8 +33,9 @@ DEFAULT_POLL_INTERVAL_SECONDS = 2.0
 
 
 def parse_args() -> argparse.Namespace:
-    default_server_url, _server_url_source = get_skill_env("CLAW_FEDERATION_SERVER_URL")
+    default_server_url, server_url_source = get_skill_env("CLAW_FEDERATION_SERVER_URL")
     common = argparse.ArgumentParser(add_help=False)
+    common.set_defaults(_server_url_source=server_url_source)
     common.add_argument(
         "--server-url",
         default=(default_server_url or "").strip(),
@@ -58,6 +60,11 @@ def parse_args() -> argparse.Namespace:
         "--json",
         action="store_true",
         help="Emit structured JSON output when possible.",
+    )
+    common.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show resolved configuration and a lightweight connectivity check without executing the command.",
     )
 
     parser = argparse.ArgumentParser(
@@ -122,18 +129,26 @@ def require_non_empty(value: str, message: str) -> str:
     return normalized
 
 
-def resolve_api_key_or_exit(raw_api_key: str, profile_id: str, agent_id: str) -> tuple[str, str]:
+def resolve_api_key(raw_api_key: str, profile_id: str, agent_id: str) -> tuple[str | None, str | None, str | None]:
     if raw_api_key.strip():
-        return raw_api_key.strip(), "env-or-flag"
+        return raw_api_key.strip(), "env-or-flag", None
 
     key, _profile, auth_store_path = resolve_platform_api_key(profile_id=profile_id, agent_id=agent_id)
     if key:
-        return key, f"auth-profiles:{auth_store_path}"
+        return key, f"auth-profiles:{auth_store_path}", None
 
-    raise SystemExit(
+    return None, None, (
         "Missing platform API key. Set CLAW_FEDERATION_PLATFORM_API_KEY, pass --api-key, "
         "or bootstrap and store a key first."
     )
+
+
+def resolve_api_key_or_exit(raw_api_key: str, profile_id: str, agent_id: str) -> tuple[str, str]:
+    key, source, error = resolve_api_key(raw_api_key, profile_id, agent_id)
+    if error:
+        raise SystemExit(error)
+    assert key is not None and source is not None
+    return key, source
 
 
 def load_json_object(raw: str, *, source: str) -> dict[str, Any]:
@@ -416,8 +431,80 @@ def print_history(sessions: list[dict[str, Any]], state_path: str) -> None:
         )
 
 
+def print_dry_run(args: argparse.Namespace) -> int:
+    server_url = require_server_url(args.server_url)
+    reachable, detail = probe_server_openapi(server_url)
+    payload: dict[str, Any] = {
+        "ok": reachable,
+        "dry_run": True,
+        "command": args.command,
+        "server_url": server_url,
+        "server_url_source": args._server_url_source or "flag-or-arg",
+        "connectivity": detail,
+    }
+
+    needs_api_key = args.command in {"create-topup", "status", "watch", "balance"} or (
+        args.command == "explain-402" and args.auto_recover
+    )
+    if needs_api_key:
+        api_key, api_key_source, api_key_error = resolve_api_key(args.api_key, args.profile_id, args.agent_id)
+        payload["api_key_source"] = api_key_source
+        payload["api_key_error"] = api_key_error
+        payload["ok"] = payload["ok"] and api_key_error is None
+
+    if args.command == "explain-402":
+        parsed = load_json_object_from_option(args.response_json, args.response_file, source_name="response")
+        summary = parse_insufficient_balance(parsed)
+        if not summary:
+            raise SystemExit("The provided response is not a structured insufficient_balance payload.")
+        payload["workspace_id"] = summary.get("workspace_id")
+        payload["shortfall"] = summary["shortfall"]
+        payload["auto_recover"] = args.auto_recover
+    elif args.command == "create-topup":
+        payload["amount"] = derive_topup_amount(args)
+    elif args.command == "status":
+        payload["session_id"] = args.session_id
+    elif args.command == "watch":
+        payload["session_id"] = args.session_id
+        payload["interval_seconds"] = args.interval_seconds
+        payload["timeout_seconds"] = args.timeout_seconds
+    elif args.command == "balance":
+        payload["workspace_id"] = args.workspace_id
+    elif args.command == "history":
+        payload["workspace_id"] = args.workspace_id
+        payload["limit"] = args.limit
+
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print("Dry run only. No payment recovery action was executed.")
+        print(f"Command: {args.command}")
+        print(f"Resolved server URL: {server_url}")
+        print(f"Server URL source: {payload['server_url_source']}")
+        print(f"Connectivity check: {detail}")
+        if "api_key_error" in payload:
+            if payload["api_key_error"]:
+                print(f"API key: missing ({payload['api_key_error']})")
+            else:
+                print(f"API key source: {payload['api_key_source']}")
+        if args.command == "explain-402":
+            shortfall = payload["shortfall"]
+            print(f"Workspace ID: {payload.get('workspace_id', '<unknown>')}")
+            print(f"Shortfall: {shortfall['amount']} {shortfall['unit']}")
+            print(f"Auto-recover: {'yes' if args.auto_recover else 'no'}")
+        elif args.command == "create-topup":
+            print(f"Requested amount: {payload['amount']}")
+        elif "session_id" in payload:
+            print(f"Session ID: {payload['session_id']}")
+        elif args.command == "history":
+            print(f"Limit: {payload['limit']}")
+    return 0 if payload["ok"] else 1
+
+
 def main() -> int:
     args = parse_args()
+    if args.dry_run:
+        return print_dry_run(args)
 
     if args.command == "explain-402":
         payload = load_json_object_from_option(args.response_json, args.response_file, source_name="response")

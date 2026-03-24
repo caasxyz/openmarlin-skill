@@ -15,6 +15,7 @@ from typing import Any
 from openclaw_skill_config import (
     build_server_connection_error,
     get_skill_env,
+    probe_server_openapi,
     require_server_url,
 )
 from openclaw_billing_state import record_balance_snapshot
@@ -42,9 +43,10 @@ ERROR_HELP = {
 
 
 def parse_args() -> argparse.Namespace:
-    default_server_url, _server_url_source = get_skill_env("CLAW_FEDERATION_SERVER_URL")
-    default_provider, _provider_source = get_skill_env("CLAW_FEDERATION_DEFAULT_PROVIDER_ID")
+    default_server_url, server_url_source = get_skill_env("CLAW_FEDERATION_SERVER_URL")
+    default_provider, provider_source = get_skill_env("CLAW_FEDERATION_DEFAULT_PROVIDER_ID")
     common = argparse.ArgumentParser(add_help=False)
+    common.set_defaults(_server_url_source=server_url_source, _provider_source=provider_source)
     common.add_argument(
         "--server-url",
         default=(default_server_url or "").strip(),
@@ -70,6 +72,11 @@ def parse_args() -> argparse.Namespace:
         "--json",
         action="store_true",
         help="Emit structured JSON output when possible.",
+    )
+    common.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show resolved configuration and a lightweight connectivity check without executing the request.",
     )
     common.add_argument(
         "--profile-id",
@@ -128,18 +135,26 @@ def require_non_empty(value: str, message: str) -> str:
     return normalized
 
 
-def resolve_api_key_or_exit(raw_api_key: str, profile_id: str, agent_id: str) -> tuple[str, str]:
+def resolve_api_key(raw_api_key: str, profile_id: str, agent_id: str) -> tuple[str | None, str | None, str | None]:
     if raw_api_key.strip():
-        return raw_api_key.strip(), "env-or-flag"
+        return raw_api_key.strip(), "env-or-flag", None
 
     key, _profile, auth_store_path = resolve_platform_api_key(profile_id=profile_id, agent_id=agent_id)
     if key:
-        return key, f"auth-profiles:{auth_store_path}"
+        return key, f"auth-profiles:{auth_store_path}", None
 
-    raise SystemExit(
+    return None, None, (
         "Missing platform API key. Set CLAW_FEDERATION_PLATFORM_API_KEY, pass --api-key, "
         "or bootstrap with --store so the key is saved into OpenClaw auth-profiles.json."
     )
+
+
+def resolve_api_key_or_exit(raw_api_key: str, profile_id: str, agent_id: str) -> tuple[str, str]:
+    key, source, error = resolve_api_key(raw_api_key, profile_id, agent_id)
+    if error:
+        raise SystemExit(error)
+    assert key is not None and source is not None
+    return key, source
 
 
 def load_json_object(raw: str, *, source: str) -> dict[str, Any]:
@@ -262,7 +277,7 @@ def explain_error(code: int, payload: dict[str, Any] | str, provider: str | None
     return f"HTTP {code}: {payload}"
 
 
-def print_success(command: str, provider: str, labels: dict[str, str] | None, payload: dict[str, Any] | str) -> None:
+def print_success(command: str, provider: str | None, labels: dict[str, str] | None, payload: dict[str, Any] | str) -> None:
     print(f"Command: {command}")
     if provider:
         print(f"Provider override: {provider}")
@@ -279,12 +294,62 @@ def print_success(command: str, provider: str, labels: dict[str, str] | None, pa
         print(json.dumps(payload, indent=2, sort_keys=True))
 
 
+def print_dry_run(args: argparse.Namespace, server_url: str, provider: str | None, labels: dict[str, str] | None) -> int:
+    api_key, api_key_source, api_key_error = resolve_api_key(args.api_key, args.profile_id, args.agent_id)
+    reachable, detail = probe_server_openapi(server_url)
+    payload: dict[str, Any] = {
+        "ok": reachable and api_key_error is None,
+        "dry_run": True,
+        "command": args.command,
+        "server_url": server_url,
+        "server_url_source": args._server_url_source or "flag-or-arg",
+        "api_key_source": api_key_source,
+        "api_key_error": api_key_error,
+        "provider_override": provider,
+        "provider_source": args._provider_source or ("flag-or-arg" if provider else None),
+        "labels": labels or {},
+        "connectivity": detail,
+    }
+    if args.command == "responses":
+        body = load_json_object_from_option(args.body_json, args.body_file, source_name="body")
+        payload["request_preview"] = {"model": body.get("model"), "has_input": "input" in body}
+    elif args.command == "invoke":
+        input_payload = load_json_object_from_option(args.input_json, args.input_file, source_name="input")
+        payload["skill"] = args.skill
+        payload["input_keys"] = sorted(input_payload.keys())
+
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        print("Dry run only. No platform request was executed.")
+        print(f"Command: {args.command}")
+        print(f"Resolved server URL: {server_url}")
+        print(f"Server URL source: {payload['server_url_source']}")
+        print(f"Connectivity check: {detail}")
+        if api_key_error:
+            print(f"API key: missing ({api_key_error})")
+        else:
+            print(f"API key source: {api_key_source}")
+        print(f"Provider override: {provider or '<none; server-side automatic routing>'}")
+        print(f"Routing labels: {json.dumps(labels or {}, sort_keys=True)}")
+        if args.command == "responses":
+            preview = payload["request_preview"]
+            print(f"Model: {preview.get('model', '<unknown>')}")
+            print(f"Input present: {'yes' if preview.get('has_input') else 'no'}")
+        else:
+            print(f"Skill: {args.skill}")
+            print(f"Input keys: {', '.join(payload['input_keys']) if payload['input_keys'] else '<none>'}")
+    return 0 if payload["ok"] else 1
+
+
 def main() -> int:
     args = parse_args()
     server_url = require_server_url(args.server_url)
-    api_key, api_key_source = resolve_api_key_or_exit(args.api_key, args.profile_id, args.agent_id)
     provider = args.provider.strip() or None
     labels = resolve_labels(args.label)
+    if args.dry_run:
+        return print_dry_run(args, server_url, provider, labels)
+    api_key, api_key_source = resolve_api_key_or_exit(args.api_key, args.profile_id, args.agent_id)
 
     if args.command == "responses":
         body = load_json_object_from_option(args.body_json, args.body_file, source_name="body")

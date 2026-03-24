@@ -175,6 +175,12 @@ When the server returns `handoff.authorization_url`, this command should
 attempt to open it in the system browser automatically, then print the session
 ID, any device code, and the `watch` command to continue in OpenClaw.
 
+Dry-run the registration setup without creating a session:
+
+```bash
+python3 scripts/registration_session.py --server-url https://your-server.example.com create --dry-run
+```
+
 Create an explicit callback/browser session:
 
 ```bash
@@ -226,6 +232,16 @@ python3 scripts/payment_recovery.py explain-402 \
   --response-json '{"error_code":"insufficient_balance","message":"Workspace balance is insufficient for this request.","workspace_id":"ws_123","current_balance":{"amount":0,"unit":"credits"},"required_balance":{"amount":1,"unit":"credits"}}'
 ```
 
+Dry-run 402 recovery setup without creating anything:
+
+```bash
+python3 scripts/payment_recovery.py explain-402 \
+  --dry-run \
+  --server-url https://your-server.example.com \
+  --api-key claw_wsk_placeholder \
+  --response-json '{"error_code":"insufficient_balance","message":"Workspace balance is insufficient for this request.","workspace_id":"ws_123","current_balance":{"amount":0,"unit":"credits"},"required_balance":{"amount":1,"unit":"credits"}}'
+```
+
 Explain a structured 402 response and immediately create the top-up session:
 
 ```bash
@@ -272,6 +288,16 @@ automatically:
 
 ```bash
 python3 scripts/platform_request.py responses \
+  --body-json '{"model":"openai-codex/gpt-5.4","input":"say hello"}'
+```
+
+Dry-run a routed request without sending it:
+
+```bash
+python3 scripts/platform_request.py responses \
+  --dry-run \
+  --server-url https://your-server.example.com \
+  --api-key claw_wsk_placeholder \
   --body-json '{"model":"openai-codex/gpt-5.4","input":"say hello"}'
 ```
 

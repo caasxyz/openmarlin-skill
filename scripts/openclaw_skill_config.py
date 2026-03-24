@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+import urllib.error
+import urllib.request
 
 
 SKILL_KEY = "claw-federation-registration"
@@ -132,3 +134,15 @@ def build_server_connection_error(server_url: str, reason: str) -> str:
         resolved_value=server_url,
         reason=f"Request could not reach claw-federation-server: {reason}",
     )
+
+
+def probe_server_openapi(server_url: str) -> tuple[bool, str]:
+    url = f"{server_url.rstrip('/')}/openapi.json"
+    request = urllib.request.Request(url, method="GET", headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request) as response:
+            return True, f"reachable via GET {url} (HTTP {response.status})"
+    except urllib.error.HTTPError as error:
+        return False, f"GET {url} returned HTTP {error.code}"
+    except urllib.error.URLError as error:
+        return False, f"GET {url} failed: {error.reason}"
