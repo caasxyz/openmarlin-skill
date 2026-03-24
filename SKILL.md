@@ -226,6 +226,14 @@ python3 scripts/payment_recovery.py explain-402 \
   --response-json '{"error_code":"insufficient_balance","message":"Workspace balance is insufficient for this request.","workspace_id":"ws_123","current_balance":{"amount":0,"unit":"credits"},"required_balance":{"amount":1,"unit":"credits"}}'
 ```
 
+Explain a structured 402 response and immediately create the top-up session:
+
+```bash
+python3 scripts/payment_recovery.py explain-402 \
+  --auto-recover \
+  --response-json '{"error_code":"insufficient_balance","message":"Workspace balance is insufficient for this request.","workspace_id":"ws_123","current_balance":{"amount":0,"unit":"credits"},"required_balance":{"amount":1,"unit":"credits"}}'
+```
+
 Create a top-up session directly from the 402 shortfall:
 
 ```bash
@@ -418,6 +426,7 @@ When the server returns a structured `402 insufficient_balance` response:
 
 - show the current balance, required balance, and shortfall explicitly
 - tell the user this is a recoverable billing state, not a broken request
+- prefer `explain-402 --auto-recover` when the user wants you to carry them directly into the next step
 - offer the next two actions inside OpenClaw:
   `python3 scripts/payment_recovery.py create-topup ...`
   `python3 scripts/payment_recovery.py watch --session-id <topup-session-id>`

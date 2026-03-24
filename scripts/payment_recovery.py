@@ -70,6 +70,11 @@ def parse_args() -> argparse.Namespace:
     explain = subparsers.add_parser("explain-402", help="Explain a structured 402 response.", parents=[common])
     explain.add_argument("--response-json", help="Raw JSON object payload for the 402 response.")
     explain.add_argument("--response-file", help="Path to a JSON file containing the 402 response.")
+    explain.add_argument(
+        "--auto-recover",
+        action="store_true",
+        help="Immediately create a top-up session for the shortfall after explaining the 402.",
+    )
 
     create = subparsers.add_parser("create-topup", help="Create a top-up session.", parents=[common])
     create.add_argument("--amount", type=float, help="Requested top-up amount in credits.")
@@ -251,6 +256,11 @@ def derive_topup_amount(args: argparse.Namespace) -> float:
     return amount if amount > 0 else summary["required_balance"]["amount"]
 
 
+def derive_topup_amount_from_summary(summary: dict[str, Any]) -> float:
+    amount = summary["shortfall"]["amount"]
+    return amount if amount > 0 else summary["required_balance"]["amount"]
+
+
 def remember_402_summary(summary: dict[str, Any], *, agent_id: str) -> dict[str, Any]:
     workspace_id = summary.get("workspace_id")
     if not isinstance(workspace_id, str) or not workspace_id.strip():
@@ -341,6 +351,15 @@ def print_402_summary(summary: dict[str, Any]) -> None:
         print(f"  {command}")
 
 
+def create_topup_session(server_url: str, auth_headers: dict[str, str], amount: float) -> tuple[int, dict[str, Any] | str]:
+    return request_json(
+        f"{server_url}/v1/topup/sessions",
+        method="POST",
+        headers=auth_headers,
+        payload={"amount": amount},
+    )
+
+
 def print_topup_session(payload: dict[str, Any]) -> None:
     print(f"Top-up session ID: {payload.get('topup_session_id', '<unknown>')}")
     print(f"Workspace ID: {payload.get('workspace_id', '<unknown>')}")
@@ -406,21 +425,65 @@ def main() -> int:
         if not summary:
             raise SystemExit("The provided response is not a structured insufficient_balance payload.")
         stored = remember_402_summary(summary, agent_id=args.agent_id)
+        auto_recovered = None
+        auto_recovered_session = None
+        if args.auto_recover:
+            server_url = require_server_url(args.server_url)
+            api_key, api_key_source = resolve_api_key_or_exit(args.api_key, args.profile_id, args.agent_id)
+            auth_headers = {"Authorization": f"Bearer {api_key}"}
+            amount = derive_topup_amount_from_summary(summary)
+            status, topup_payload = create_topup_session(server_url, auth_headers, amount)
+            if status >= 400:
+                if args.json:
+                    print(
+                        json.dumps(
+                            {
+                                "ok": False,
+                                "status": status,
+                                "api_key_source": api_key_source,
+                                "recovery": summary,
+                                "commands": build_recovery_commands(summary),
+                                "stored": stored,
+                                "response": topup_payload,
+                            },
+                            indent=2,
+                            sort_keys=True,
+                        )
+                    )
+                else:
+                    print_402_summary(summary)
+                    print(f"Saved billing snapshot to: {stored['billing_state_path']}")
+                    print(f"Auto-recover failed with HTTP {status}: {topup_payload}", file=sys.stderr)
+                return 1
+            if isinstance(topup_payload, dict):
+                auto_recovered = {
+                    "ok": True,
+                    "status": status,
+                    "api_key_source": api_key_source,
+                    "response": topup_payload,
+                }
+                auto_recovered_session = record_topup_session(session=topup_payload, agent_id=args.agent_id)
         if args.json:
-            print(
-                json.dumps(
-                    {
-                        "recovery": summary,
-                        "commands": build_recovery_commands(summary),
-                        "stored": stored,
-                    },
-                    indent=2,
-                    sort_keys=True,
-                )
-            )
+            payload_out: dict[str, Any] = {
+                "recovery": summary,
+                "commands": build_recovery_commands(summary),
+                "stored": stored,
+            }
+            if auto_recovered:
+                payload_out["auto_recovered"] = auto_recovered
+            if auto_recovered_session:
+                payload_out["stored_session"] = auto_recovered_session
+            print(json.dumps(payload_out, indent=2, sort_keys=True))
         else:
             print_402_summary(summary)
             print(f"Saved billing snapshot to: {stored['billing_state_path']}")
+            if auto_recovered and isinstance(auto_recovered["response"], dict):
+                print("Auto-recovery:")
+                print_topup_session(auto_recovered["response"])
+                print(
+                    "Continue in OpenClaw with: "
+                    f"python3 scripts/payment_recovery.py watch --session-id {auto_recovered['response'].get('topup_session_id', '<topup-session-id>')}"
+                )
         return 0
 
     if args.command == "balance":
@@ -513,12 +576,7 @@ def main() -> int:
 
     if args.command == "create-topup":
         amount = derive_topup_amount(args)
-        status, payload = request_json(
-            f"{server_url}/v1/topup/sessions",
-            method="POST",
-            headers=auth_headers,
-            payload={"amount": amount},
-        )
+        status, payload = create_topup_session(server_url, auth_headers, amount)
     elif args.command == "status":
         status, payload = request_json(
             f"{server_url}/v1/topup/sessions/{urllib.parse.quote(args.session_id)}",
