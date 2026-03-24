@@ -126,6 +126,14 @@ configured WorkOS URL templates. When `registration_session.py create` gets an
 authorization URL back, it now tries to open that URL in the system browser
 automatically and then tells the user how to continue polling in OpenClaw.
 
+## Trust And Secret Handling
+
+- Treat `CLAW_FEDERATION_SERVER_URL` as the trusted API origin for registration, bootstrap, routing, balance, and top-up calls.
+- Treat browser handoff URLs as trusted only when they come from the server's `handoff.authorization_url`.
+- Do not reconstruct WorkOS or browser handoff URLs locally from device codes or callback state.
+- Store issued platform API keys in OpenClaw auth-profile storage, not in ordinary skill config.
+- Use `CLAW_FEDERATION_PLATFORM_API_KEY` only as a temporary direct override when debugging or testing.
+
 ## First Run
 
 Once installed, common entrypoints are:
