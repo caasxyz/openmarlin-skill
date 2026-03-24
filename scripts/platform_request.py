@@ -12,7 +12,11 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from openclaw_skill_config import get_skill_env
+from openclaw_skill_config import (
+    build_server_connection_error,
+    get_skill_env,
+    require_server_url,
+)
 from openclaw_billing_state import record_balance_snapshot
 from openclaw_platform_auth import DEFAULT_AGENT_ID, DEFAULT_PROFILE_ID, resolve_platform_api_key
 from payment_recovery import build_recovery_commands, parse_insufficient_balance
@@ -222,7 +226,9 @@ def request(
             payload_out = raw
         return error.code, payload_out, dict(error.headers.items())
     except urllib.error.URLError as error:
-        raise SystemExit(f"Request failed for {method} {url}: {error.reason}") from error
+        parsed = urllib.parse.urlparse(url)
+        base_url = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else url
+        raise SystemExit(build_server_connection_error(base_url, str(error.reason))) from error
 
 
 def explain_error(code: int, payload: dict[str, Any] | str, provider: str | None, labels: dict[str, str] | None) -> str:
@@ -275,10 +281,7 @@ def print_success(command: str, provider: str, labels: dict[str, str] | None, pa
 
 def main() -> int:
     args = parse_args()
-    server_url = require_non_empty(
-        args.server_url,
-        "Missing server URL. Set CLAW_FEDERATION_SERVER_URL or pass --server-url.",
-    ).rstrip("/")
+    server_url = require_server_url(args.server_url)
     api_key, api_key_source = resolve_api_key_or_exit(args.api_key, args.profile_id, args.agent_id)
     provider = args.provider.strip() or None
     labels = resolve_labels(args.label)

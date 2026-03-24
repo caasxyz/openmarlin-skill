@@ -13,7 +13,11 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from openclaw_skill_config import get_skill_env
+from openclaw_skill_config import (
+    build_server_connection_error,
+    get_skill_env,
+    require_server_url,
+)
 from openclaw_billing_state import (
     get_last_balance_snapshot,
     list_topup_sessions,
@@ -168,7 +172,9 @@ def request_json(url: str, method: str = "GET", headers: dict[str, str] | None =
             payload_obj = raw
         return error.code, payload_obj
     except urllib.error.URLError as error:
-        raise SystemExit(f"Request failed for {method} {url}: {error.reason}") from error
+        parsed = urllib.parse.urlparse(url)
+        base_url = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else url
+        raise SystemExit(build_server_connection_error(base_url, str(error.reason))) from error
 
 
 def parse_workspace_balance(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -425,10 +431,7 @@ def main() -> int:
             if not summary:
                 raise SystemExit("The provided response is not a structured insufficient_balance payload.")
             remember_402_summary(summary, agent_id=args.agent_id)
-        server_url = require_non_empty(
-            args.server_url,
-            "Missing server URL. Set CLAW_FEDERATION_SERVER_URL or pass --server-url.",
-        ).rstrip("/")
+        server_url = require_server_url(args.server_url)
         api_key, api_key_source = resolve_api_key_or_exit(args.api_key, args.profile_id, args.agent_id)
         auth_headers = {"Authorization": f"Bearer {api_key}"}
 
@@ -503,10 +506,7 @@ def main() -> int:
             print_history(sessions, state_path)
         return 0
 
-    server_url = require_non_empty(
-        args.server_url,
-        "Missing server URL. Set CLAW_FEDERATION_SERVER_URL or pass --server-url.",
-    ).rstrip("/")
+    server_url = require_server_url(args.server_url)
 
     api_key, api_key_source = resolve_api_key_or_exit(args.api_key, args.profile_id, args.agent_id)
     auth_headers = {"Authorization": f"Bearer {api_key}"}

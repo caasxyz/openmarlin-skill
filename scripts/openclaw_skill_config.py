@@ -10,11 +10,12 @@ from typing import Any
 
 SKILL_KEY = "claw-federation-registration"
 SKILL_KEY_ALIASES = [SKILL_KEY, "claw-federation"]
+PRIMARY_CONFIG_PATH = Path.home() / ".openclaw" / "openclaw.json"
 
 
 def _candidate_config_paths() -> list[Path]:
     return [
-        Path.home() / ".openclaw" / "openclaw.json",
+        PRIMARY_CONFIG_PATH,
         Path("/data/.clawdbot/openclaw.json"),
     ]
 
@@ -78,3 +79,56 @@ def get_skill_env(var_name: str) -> tuple[str | None, str | None]:
         return value.strip(), f"openclaw-config:{config_path}"
 
     return None, config_path
+
+
+def preferred_openclaw_config_path() -> str:
+    return str(PRIMARY_CONFIG_PATH)
+
+
+def build_server_url_setup_message(*, resolved_value: str | None = None, reason: str | None = None) -> str:
+    lines: list[str] = []
+    if reason:
+        lines.append(reason)
+    headline = (
+        "OpenClaw federation is configured, but the current server URL could not be reached."
+        if resolved_value
+        else "OpenClaw federation is not configured yet."
+    )
+    lines.extend(
+        [
+            headline,
+            "",
+            "Set CLAW_FEDERATION_SERVER_URL to your claw-federation-server base URL.",
+            "",
+            "One-off shell setup:",
+            '  export CLAW_FEDERATION_SERVER_URL="https://your-server.example.com"',
+            "",
+            f"Persisted OpenClaw config: {preferred_openclaw_config_path()}",
+            f'  skills.entries["{SKILL_KEY}"].env.CLAW_FEDERATION_SERVER_URL = "https://your-server.example.com"',
+            "",
+            f"If available in your OpenClaw build, prefer `openclaw skills update-config {SKILL_KEY}` or the skill settings UI.",
+        ]
+    )
+    if resolved_value:
+        lines.extend(
+            [
+                "",
+                f"Current resolved server URL: {resolved_value}",
+                "If that value is wrong, update it and retry the same command.",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def require_server_url(raw: str) -> str:
+    server_url = raw.strip().rstrip("/")
+    if not server_url:
+        raise SystemExit(build_server_url_setup_message())
+    return server_url
+
+
+def build_server_connection_error(server_url: str, reason: str) -> str:
+    return build_server_url_setup_message(
+        resolved_value=server_url,
+        reason=f"Request could not reach claw-federation-server: {reason}",
+    )

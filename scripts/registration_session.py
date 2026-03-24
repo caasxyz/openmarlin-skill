@@ -14,6 +14,7 @@ import urllib.request
 from typing import Any
 
 from openclaw_skill_config import get_skill_env
+from openclaw_skill_config import build_server_connection_error, require_server_url
 from openclaw_platform_auth import (
     DEFAULT_AGENT_ID,
     DEFAULT_PROFILE_ID,
@@ -151,16 +152,6 @@ def parse_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
-
-def require_server_url(raw: str) -> str:
-    server_url = raw.strip().rstrip("/")
-    if not server_url:
-        raise SystemExit(
-            "Missing server URL. Set CLAW_FEDERATION_SERVER_URL or pass --server-url."
-        )
-    return server_url
-
-
 def request_json(url: str, method: str = "GET", payload: dict[str, Any] | None = None) -> dict[str, Any]:
     body = None
     headers = {"Accept": "application/json"}
@@ -184,7 +175,9 @@ def request_json(url: str, method: str = "GET", payload: dict[str, Any] | None =
             f"HTTP {error.code} for {method} {url}: {json.dumps(payload_obj, sort_keys=True)}"
         ) from error
     except urllib.error.URLError as error:
-        raise SystemExit(f"Request failed for {method} {url}: {error.reason}") from error
+        parsed = urllib.parse.urlparse(url)
+        base_url = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else url
+        raise SystemExit(build_server_connection_error(base_url, str(error.reason))) from error
 
 
 def build_browser_url(session: dict[str, Any]) -> str | None:
