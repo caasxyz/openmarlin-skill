@@ -230,6 +230,37 @@ At handoff, tell the user:
 - the authoritative balance if it was refreshed from the server, otherwise that the shown balance is fallback context
 - the next safe action, such as retrying the original request
 
+## Playbooks
+
+For new registration:
+
+- start with `python3 scripts/registration_session.py create`
+- prefer the default `device` flow unless the deployment explicitly requires `workos_callback`
+- if the server returns `handoff.authorization_url`, let OpenClaw open it and keep the user anchored in OpenClaw for the rest of the flow
+- after creation, always surface the session ID, any device code, and the exact `watch` command to resume
+- do not stop at browser handoff; continue with `watch`, then `bootstrap`, and finally tell the user where the key was stored or how to use the issued result
+
+For reconnect or resume:
+
+- if the user already has a registration session ID, start with `status` or `watch` instead of creating a new session
+- if the session is still `pending_external_auth`, restate the handoff URL if present, otherwise restate the device code or callback state and explain what is missing
+- if the session is `completed` but bootstrap has not happened yet, go straight to `issue-api-key` or `bootstrap`
+- if the session is `expired`, explain that it cannot be resumed and start a fresh registration flow
+
+For structured `402` recovery:
+
+- treat the `402 insufficient_balance` payload as a workflow input, not just an error to summarize
+- first explain the current balance, required balance, and shortfall in plain language when those fields are present
+- then choose whether to stop at explanation, create the top-up session explicitly, or use `--auto-recover`
+- when a top-up session exists, always surface the checkout URL, session ID, and the exact `status` or `watch` command to resume after payment
+
+For top-up follow-through:
+
+- after the user completes Stripe checkout, use `watch` or `status` on the top-up session rather than assuming payment settled
+- if the session reaches `credit_applied`, surface `credited_ledger_entry_id` when available and refresh the authoritative balance view
+- if the session is still pending or failed, tell the user that plainly and give the next safe step instead of implying the workspace is ready
+- once balance is restored, point the user back to the original request they were trying to run
+
 ## Commands
 
 Create a default device-style session:
