@@ -1,7 +1,7 @@
 ---
 name: claw-federation-registration
 description: "Guide platform registration, account linking, and server-routed provider selection for claw-federation in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, or send a platform request with automatic routing, an explicit provider override, or simple routing hints. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
-metadata: {"openclaw":{"emoji":"🦞","skillKey":"claw-federation-registration","requires":{"bins":["python3"],"env":["CLAW_FEDERATION_SERVER_URL"]},"primaryEnv":"CLAW_FEDERATION_SERVER_URL"}}
+metadata: {"openclaw":{"emoji":"🦞","homepage":"https://github.com/caasxyz/claw-federation-skill","skillKey":"claw-federation-registration","requires":{"bins":["python3"],"env":["CLAW_FEDERATION_SERVER_URL"]},"primaryEnv":"CLAW_FEDERATION_SERVER_URL","install":[{"id":"brew-python3","kind":"brew","formula":"python","bins":["python3"],"label":"Install Python 3 (brew)","os":["darwin"]}]}}
 ---
 
 # Claw Federation Registration
@@ -142,6 +142,10 @@ required and default values from:
 
 That means the user does not need to hand-edit config files as long as
 OpenClaw writes the skill config on their behalf.
+
+The skill metadata also advertises the supported OpenClaw installer hint for
+`python3` and marks `CLAW_FEDERATION_SERVER_URL` as the primary required env.
+More detailed env onboarding still lives in this Setup section.
 
 Optional direct API key override:
 
