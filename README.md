@@ -16,7 +16,7 @@ Primary entrypoints:
 - `SKILL.md` for OpenClaw skill behavior and operator guidance
 - `scripts/registration_session.py` for creating, polling, resuming, and
   bootstrapping workspace API keys after registration
-- `scripts/platform_request.py` for authenticated `/invoke` or `/v1/responses`
+- `scripts/platform_request.py` for authenticated `/invoke` or `/v1/executions`
   requests with server-side automatic routing, optional provider overrides, and
   routing hints
 - `scripts/payment_recovery.py` for structured 402 recovery guidance and
@@ -141,8 +141,8 @@ Once installed, common entrypoints are:
 ```bash
 python3 scripts/registration_session.py create
 python3 scripts/registration_session.py --server-url https://your-server.example.com create --dry-run
-python3 scripts/platform_request.py responses --body-json '{"model":"openai-codex/gpt-5.4","input":"hello"}'
-python3 scripts/platform_request.py responses --dry-run --server-url https://your-server.example.com --api-key claw_wsk_placeholder --body-json '{"model":"openai-codex/gpt-5.4","input":"hello"}'
+python3 scripts/platform_request.py executions --body-json '{"instruction":"hello","model":"gpt-5.4"}'
+python3 scripts/platform_request.py executions --dry-run --server-url https://your-server.example.com --api-key claw_wsk_placeholder --body-json '{"instruction":"hello","model":"gpt-5.4"}'
 python3 scripts/payment_recovery.py explain-402 --response-file /path/to/402.json
 python3 scripts/payment_recovery.py explain-402 --auto-recover --response-file /path/to/402.json
 ```

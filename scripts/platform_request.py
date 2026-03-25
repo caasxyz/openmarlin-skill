@@ -32,10 +32,9 @@ ERROR_HELP = {
     "invalid_routing_labels": "Routing labels were invalid. Use repeated --label key=value flags or valid JSON in CLAW_FEDERATION_DEFAULT_ROUTING_LABELS.",
     "provider_unavailable": "The selected provider is not currently connected.",
     "provider_label_mismatch": "The selected provider does not satisfy the requested routing hints.",
-    "provider_route_not_found": "The server could not find any eligible provider for this request. Retry with different labels, a different model, or an explicit --provider override.",
-    "provider_route_ambiguous": "More than one eligible provider matched and the server could not choose automatically. Retry with narrower labels or an explicit --provider override.",
-    "llm_api_not_available": "The selected provider is connected, but it does not expose the responses API.",
-    "llm_model_not_allowed": "The requested model is not allowed by the selected provider.",
+    "execution_provider_not_found": "The server could not find any eligible execution provider for this request. Retry with different labels, a different model, or an explicit --provider override.",
+    "execution_provider_ambiguous": "More than one eligible execution provider matched and the server could not choose automatically. Retry with narrower labels or an explicit --provider override.",
+    "execution_kind_not_available": "The selected provider does not support the requested execution kind.",
     "skill_not_available": "No connected provider currently exposes that skill.",
     "skill_not_available_on_provider": "That provider does not expose the requested skill.",
     "invalid_request": "The request payload did not match the server contract.",
@@ -96,18 +95,18 @@ def parse_args() -> argparse.Namespace:
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    responses = subparsers.add_parser(
-        "responses",
-        help="Send a /v1/responses request.",
+    executions = subparsers.add_parser(
+        "executions",
+        help="Send a /v1/executions request.",
         parents=[common],
     )
-    responses.add_argument(
+    executions.add_argument(
         "--body-json",
-        help="Raw JSON object payload for /v1/responses.",
+        help="Raw JSON object payload for /v1/executions.",
     )
-    responses.add_argument(
+    executions.add_argument(
         "--body-file",
-        help="Path to a JSON file containing the /v1/responses payload.",
+        help="Path to a JSON file containing the /v1/executions payload.",
     )
 
     invoke = subparsers.add_parser(
@@ -246,6 +245,44 @@ def request(
         raise SystemExit(build_server_connection_error(base_url, str(error.reason))) from error
 
 
+def parse_sse_events(raw: str) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    event_type: str | None = None
+    data_lines: list[str] = []
+
+    def flush_event() -> None:
+        nonlocal event_type, data_lines
+        if event_type is None and not data_lines:
+            return
+        data_raw = "\n".join(data_lines)
+        data_payload: Any = data_raw
+        if data_raw:
+            try:
+                data_payload = json.loads(data_raw)
+            except json.JSONDecodeError:
+                data_payload = data_raw
+        event: dict[str, Any] = {"event": event_type or "message", "data": data_payload}
+        events.append(event)
+        event_type = None
+        data_lines = []
+
+    for line in raw.splitlines():
+        if not line.strip():
+            flush_event()
+            continue
+        if line.startswith(":"):
+            continue
+        field, separator, value = line.partition(":")
+        value = value[1:] if separator and value.startswith(" ") else value
+        if field == "event":
+            event_type = value
+        elif field == "data":
+            data_lines.append(value)
+
+    flush_event()
+    return events
+
+
 def explain_error(code: int, payload: dict[str, Any] | str, provider: str | None, labels: dict[str, str] | None) -> str:
     if isinstance(payload, dict):
         recovery = parse_insufficient_balance(payload)
@@ -310,9 +347,14 @@ def print_dry_run(args: argparse.Namespace, server_url: str, provider: str | Non
         "labels": labels or {},
         "connectivity": detail,
     }
-    if args.command == "responses":
+    if args.command == "executions":
         body = load_json_object_from_option(args.body_json, args.body_file, source_name="body")
-        payload["request_preview"] = {"model": body.get("model"), "has_input": "input" in body}
+        payload["request_preview"] = {
+            "kind": body.get("kind", "agent_run"),
+            "model": body.get("model"),
+            "stream": body.get("stream") is True,
+            "has_instruction": isinstance(body.get("instruction"), str) and bool(body.get("instruction").strip()),
+        }
     elif args.command == "invoke":
         input_payload = load_json_object_from_option(args.input_json, args.input_file, source_name="input")
         payload["skill"] = args.skill
@@ -332,10 +374,12 @@ def print_dry_run(args: argparse.Namespace, server_url: str, provider: str | Non
             print(f"API key source: {api_key_source}")
         print(f"Provider override: {provider or '<none; server-side automatic routing>'}")
         print(f"Routing labels: {json.dumps(labels or {}, sort_keys=True)}")
-        if args.command == "responses":
+        if args.command == "executions":
             preview = payload["request_preview"]
+            print(f"Execution kind: {preview.get('kind', 'agent_run')}")
             print(f"Model: {preview.get('model', '<unknown>')}")
-            print(f"Input present: {'yes' if preview.get('has_input') else 'no'}")
+            print(f"Instruction present: {'yes' if preview.get('has_instruction') else 'no'}")
+            print(f"Stream: {'yes' if preview.get('stream') else 'no'}")
         else:
             print(f"Skill: {args.skill}")
             print(f"Input keys: {', '.join(payload['input_keys']) if payload['input_keys'] else '<none>'}")
@@ -351,19 +395,18 @@ def main() -> int:
         return print_dry_run(args, server_url, provider, labels)
     api_key, api_key_source = resolve_api_key_or_exit(args.api_key, args.profile_id, args.agent_id)
 
-    if args.command == "responses":
+    if args.command == "executions":
         body = load_json_object_from_option(args.body_json, args.body_file, source_name="body")
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-        }
         if provider:
-            headers["x-federation-provider"] = provider
+            body["provider_id"] = provider
         if labels:
-            headers["x-federation-labels"] = json.dumps(labels, sort_keys=True)
+            body["labels"] = labels
         status, payload, response_headers = request(
-            url=f"{server_url}/v1/responses",
+            url=f"{server_url}/v1/executions",
             method="POST",
-            headers=headers,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+            },
             payload=body,
         )
     elif args.command == "invoke":
@@ -391,6 +434,14 @@ def main() -> int:
     else:
         raise SystemExit(f"Unsupported command: {args.command}")
 
+    stream_events = None
+    if (
+        args.command == "executions"
+        and isinstance(payload, str)
+        and "text/event-stream" in response_headers.get("content-type", "")
+    ):
+        stream_events = parse_sse_events(payload)
+
     if status >= 400:
         message = explain_error(status, payload, provider, labels)
         recovery = parse_insufficient_balance(payload) if isinstance(payload, dict) else None
@@ -417,6 +468,7 @@ def main() -> int:
                         "labels": labels or {},
                         "api_key_source": api_key_source,
                         "response": payload,
+                        **({"stream_events": stream_events} if stream_events is not None else {}),
                         "message": message,
                         **({"recovery": recovery, "commands": build_recovery_commands(recovery)} if recovery else {}),
                         **({"stored_balance": stored_balance} if stored_balance else {}),
@@ -442,13 +494,22 @@ def main() -> int:
                     "api_key_source": api_key_source,
                     "response_headers": response_headers,
                     "response": payload,
+                    **({"stream_events": stream_events} if stream_events is not None else {}),
                 },
                 indent=2,
                 sort_keys=True,
             )
         )
     else:
-        print_success(args.command, provider, labels, payload)
+        if stream_events is not None:
+            print(f"Command: {args.command}")
+            print(f"Provider override: {provider or '<none; server-side automatic routing>'}")
+            print(f"Routing labels: {json.dumps(labels or {}, sort_keys=True)}")
+            print("Execution stream:")
+            for event in stream_events:
+                print(f"- {event['event']}: {json.dumps(event['data'], sort_keys=True)}")
+        else:
+            print_success(args.command, provider, labels, payload)
 
     return 0
 

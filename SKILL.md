@@ -1,6 +1,6 @@
 ---
 name: claw-federation-registration
-description: "Guide platform registration, account linking, and server-routed provider selection for claw-federation in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, or send a platform request with automatic routing, an explicit provider override, or simple routing hints. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
+description: "Guide platform registration, account linking, and server-routed provider selection for claw-federation in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, or send a native execution request with automatic routing, an explicit provider override, or simple routing hints. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
 metadata: {"openclaw":{"emoji":"🦞","homepage":"https://github.com/caasxyz/claw-federation-skill","skillKey":"claw-federation-registration","requires":{"bins":["python3"],"env":["CLAW_FEDERATION_SERVER_URL"]},"primaryEnv":"CLAW_FEDERATION_SERVER_URL","install":[{"id":"brew-python3","kind":"brew","formula":"python","bins":["python3"],"label":"Install Python 3 (brew)","os":["darwin"]}]}}
 ---
 
@@ -20,7 +20,7 @@ Use this skill when a user wants to create, connect, or resume a
 - After handoff begins, keep polling or resuming in OpenClaw until the session
   becomes `completed` or `expired`.
 - Treat browser use as a narrow identity step, not the main control plane.
-- For platform requests, prefer server-side automatic routing by default.
+- For platform execution requests, prefer server-side automatic routing by default.
 - Use explicit provider selection as an override when the user really wants a specific node.
 - Surface only simple routing hints such as `region=ap-sg` or `tier=premium`.
 - Do not invent hidden routing labels or pretend to bypass server validation.
@@ -109,6 +109,33 @@ structured `402` payload:
 - `required_balance.amount / unit`
 
 That 402 contract should drive recovery UX instead of generic error handling.
+
+For native OpenClaw execution federation, the caller-facing contract is:
+
+- `POST /v1/executions`
+
+The execution request currently supports:
+
+- `instruction`
+- `kind = agent_run`
+- `stream`
+- `provider_id`
+- `labels`
+- `agent_id`
+- `session_key`
+- `timeout_ms`
+- `provider`
+- `model`
+- `metadata`
+
+Execution responses return either:
+
+- terminal JSON with `request_id`, `output`, optional `metadata`, and optional `streamed_text`
+- or SSE events:
+  `execution.start`
+  `execution.chunk`
+  `execution.end`
+  `execution.error`
 
 For Stripe-backed top-up state, the public top-up contract is:
 
@@ -381,40 +408,47 @@ Show tracked top-up history from local OpenClaw billing state:
 python3 scripts/payment_recovery.py history --workspace-id <workspace-id>
 ```
 
-Send an authenticated `/v1/responses` request and let the server route it
+Send an authenticated `/v1/executions` request and let the server route it
 automatically:
 
 ```bash
-python3 scripts/platform_request.py responses \
-  --body-json '{"model":"openai-codex/gpt-5.4","input":"say hello"}'
+python3 scripts/platform_request.py executions \
+  --body-json '{"instruction":"say hello","model":"gpt-5.4"}'
 ```
 
 Dry-run a routed request without sending it:
 
 ```bash
-python3 scripts/platform_request.py responses \
+python3 scripts/platform_request.py executions \
   --dry-run \
   --server-url https://your-server.example.com \
   --api-key claw_wsk_placeholder \
-  --body-json '{"model":"openai-codex/gpt-5.4","input":"say hello"}'
+  --body-json '{"instruction":"say hello","model":"gpt-5.4"}'
 ```
 
-Send an authenticated `/v1/responses` request with an explicit provider
+Send an authenticated `/v1/executions` request with an explicit provider
 override:
 
 ```bash
-python3 scripts/platform_request.py responses \
+python3 scripts/platform_request.py executions \
   --provider node-a \
-  --body-json '{"model":"openai-codex/gpt-5.4","input":"say hello"}'
+  --body-json '{"instruction":"say hello","model":"gpt-5.4"}'
 ```
 
 Send a request with simple routing hints and let the server narrow the route:
 
 ```bash
-python3 scripts/platform_request.py responses \
+python3 scripts/platform_request.py executions \
   --label region=ap-sg \
   --label tier=premium \
-  --body-json '{"model":"openai-codex/gpt-5.4","input":"summarize this"}'
+  --body-json '{"instruction":"summarize this","model":"gpt-5.4"}'
+```
+
+Request streaming execution updates over SSE:
+
+```bash
+python3 scripts/platform_request.py executions \
+  --body-json '{"instruction":"say hello","model":"gpt-5.4","stream":true}'
 ```
 
 Invoke a registered remote skill with automatic provider selection:
@@ -530,17 +564,18 @@ Translate common server responses into plain language:
 
 - `provider_unavailable`: the selected provider is not currently connected
 - `provider_route_not_found`: the server could not find any eligible provider
-  for the requested model/labels/default route
-- `provider_route_ambiguous`: more than one provider matched and the server
-  needs narrower labels or an explicit provider override
+  for the requested skill route
+- `execution_provider_not_found`: the server could not find any eligible
+  execution provider for the requested kind/model/labels/default route
+- `execution_provider_ambiguous`: more than one execution provider matched and
+  the server needs narrower labels or an explicit provider override
 - `provider_label_mismatch`: the provider does not satisfy the requested routing
   hints
 - `skill_not_available_on_provider`: that provider does not expose the requested
   skill
 - `skill_not_available`: no connected provider currently exposes that skill
-- `llm_api_not_available`: the provider is connected but does not forward the
-  `responses` API
-- `llm_model_not_allowed`: the requested model is outside the provider allowlist
+- `execution_kind_not_available`: the provider is connected but does not expose
+  the requested execution kind
 - `invalid_routing_labels`: the label hints were not valid JSON or `key=value`
   pairs
 
