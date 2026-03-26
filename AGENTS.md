@@ -22,8 +22,8 @@ This repository owns the guided user flows that sit on top of
 - Every commit should be associated with the relevant GitHub issue when one exists.
 - After landing meaningful progress, update the linked issue with implementation status and verification notes.
 - When a scoped issue is fully implemented, close that issue instead of leaving it open as stale follow-up.
-- For larger changes, prefer creating a dedicated branch with the `codex/` prefix and land the work through a pull request instead of pushing directly to `main`.
-- For smaller changes that still land directly, keep commits scoped and issue-linked.
+- For larger or riskier changes, prefer creating a dedicated branch with the `codex/` prefix and land the work through a pull request instead of pushing directly to `main`.
+- For smaller, low-risk, or clearly scoped changes, it is fine to commit directly to the current branch and skip a pull request.
 - When using `gh` commands with long or Markdown-heavy bodies, prefer `--body-file` with a temporary file over inline `--body`.
 - Do not embed Markdown containing backticks, `$()`, or complex quoting directly inside `zsh -lc` command strings unless there is a strong reason.
 - For generated pull request bodies or issue comments, default to writing Markdown to `/tmp/*.md` and passing it via `--body-file`.
