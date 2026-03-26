@@ -427,6 +427,12 @@ Show tracked top-up history from local OpenClaw billing state:
 python3 scripts/payment_recovery.py history --workspace-id <workspace-id>
 ```
 
+List currently available execution models before choosing a model id:
+
+```bash
+python3 scripts/platform_request.py models
+```
+
 Send an authenticated `/v1/executions` request and let the server route it
 automatically:
 

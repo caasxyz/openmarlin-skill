@@ -141,6 +141,7 @@ Once installed, common entrypoints are:
 ```bash
 python3 scripts/registration_session.py create
 python3 scripts/registration_session.py --server-url https://your-server.example.com create --dry-run
+python3 scripts/platform_request.py models
 python3 scripts/platform_request.py executions --body-json '{"instruction":"hello","model":"gpt-5.4"}'
 python3 scripts/platform_request.py executions --dry-run --server-url https://your-server.example.com --api-key claw_wsk_placeholder --body-json '{"instruction":"hello","model":"gpt-5.4"}'
 python3 scripts/payment_recovery.py explain-402 --response-file /path/to/402.json

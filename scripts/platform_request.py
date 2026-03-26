@@ -22,6 +22,9 @@ from openclaw_platform_auth import DEFAULT_AGENT_ID, DEFAULT_PROFILE_ID, resolve
 from payment_recovery import build_recovery_commands, parse_insufficient_balance
 
 
+JsonValue = Any
+
+
 ERROR_HELP = {
     "missing_api_key": "Missing platform API key. Export OPENMARLIN_PLATFORM_API_KEY first.",
     "invalid_api_key": "The platform API key was rejected. Re-bootstrap a fresh key and retry.",
@@ -124,6 +127,12 @@ def parse_args() -> argparse.Namespace:
         help="Path to a JSON file containing the skill input object.",
     )
 
+    subparsers.add_parser(
+        "models",
+        help="List currently available execution models from /v1/models.",
+        parents=[common],
+    )
+
     return parser.parse_args()
 
 
@@ -210,7 +219,7 @@ def request(
     method: str,
     headers: dict[str, str],
     payload: dict[str, Any],
-) -> tuple[int, dict[str, Any] | str, dict[str, str]]:
+) -> tuple[int, JsonValue, dict[str, str]]:
     body = json.dumps(payload).encode("utf-8")
     request_obj = urllib.request.Request(
         url,
@@ -226,7 +235,44 @@ def request(
         with urllib.request.urlopen(request_obj) as response:
             content_type = response.headers.get("content-type", "")
             raw = response.read().decode("utf-8")
-            payload_out: dict[str, Any] | str
+            payload_out: JsonValue
+            if "application/json" in content_type and raw:
+                payload_out = json.loads(raw)
+            else:
+                payload_out = raw
+            return response.status, payload_out, dict(response.headers.items())
+    except urllib.error.HTTPError as error:
+        raw = error.read().decode("utf-8")
+        try:
+            payload_out = json.loads(raw) if raw else {}
+        except json.JSONDecodeError:
+            payload_out = raw
+        return error.code, payload_out, dict(error.headers.items())
+    except urllib.error.URLError as error:
+        parsed = urllib.parse.urlparse(url)
+        base_url = f"{parsed.scheme}://{parsed.netloc}" if parsed.scheme and parsed.netloc else url
+        raise SystemExit(build_server_connection_error(base_url, str(error.reason))) from error
+
+
+def request_without_body(
+    *,
+    url: str,
+    method: str,
+    headers: dict[str, str],
+) -> tuple[int, JsonValue, dict[str, str]]:
+    request_obj = urllib.request.Request(
+        url,
+        method=method,
+        headers={
+            "Accept": "application/json",
+            **headers,
+        },
+    )
+    try:
+        with urllib.request.urlopen(request_obj) as response:
+            content_type = response.headers.get("content-type", "")
+            raw = response.read().decode("utf-8")
+            payload_out: JsonValue
             if "application/json" in content_type and raw:
                 payload_out = json.loads(raw)
             else:
@@ -283,7 +329,7 @@ def parse_sse_events(raw: str) -> list[dict[str, Any]]:
     return events
 
 
-def explain_error(code: int, payload: dict[str, Any] | str, provider: str | None, labels: dict[str, str] | None) -> str:
+def explain_error(code: int, payload: JsonValue, provider: str | None, labels: dict[str, str] | None) -> str:
     if isinstance(payload, dict):
         recovery = parse_insufficient_balance(payload)
         if code == 402 and recovery:
@@ -314,7 +360,44 @@ def explain_error(code: int, payload: dict[str, Any] | str, provider: str | None
     return f"HTTP {code}: {payload}"
 
 
-def print_success(command: str, provider: str | None, labels: dict[str, str] | None, payload: dict[str, Any] | str) -> None:
+def iter_discovered_models(payload: JsonValue) -> list[dict[str, Any]]:
+    if isinstance(payload, dict):
+        models = payload.get("models")
+        if isinstance(models, list):
+            return [item for item in models if isinstance(item, dict)]
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    return []
+
+
+def print_models_success(payload: JsonValue) -> None:
+    models = iter_discovered_models(payload)
+    if not models:
+        print("Command: models")
+        print("Response:")
+        if isinstance(payload, str):
+            print(payload)
+        else:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        return
+
+    print("Command: models")
+    print(f"Available models: {len(models)}")
+    for entry in models:
+        model_id = entry.get("model") or entry.get("id") or entry.get("model_id") or "<unknown>"
+        provider_id = entry.get("provider_id") or entry.get("provider") or "<unknown>"
+        labels = entry.get("labels")
+        if isinstance(labels, dict) and labels:
+            print(f"- {model_id} via {provider_id} labels={json.dumps(labels, sort_keys=True)}")
+        else:
+            print(f"- {model_id} via {provider_id}")
+
+
+def print_success(command: str, provider: str | None, labels: dict[str, str] | None, payload: JsonValue) -> None:
+    if command == "models":
+        print_models_success(payload)
+        return
+
     print(f"Command: {command}")
     if provider:
         print(f"Provider override: {provider}")
@@ -359,6 +442,8 @@ def print_dry_run(args: argparse.Namespace, server_url: str, provider: str | Non
         input_payload = load_json_object_from_option(args.input_json, args.input_file, source_name="input")
         payload["skill"] = args.skill
         payload["input_keys"] = sorted(input_payload.keys())
+    elif args.command == "models":
+        payload["operation"] = "GET /v1/models"
 
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -372,14 +457,17 @@ def print_dry_run(args: argparse.Namespace, server_url: str, provider: str | Non
             print(f"API key: missing ({api_key_error})")
         else:
             print(f"API key source: {api_key_source}")
-        print(f"Provider override: {provider or '<none; server-side automatic routing>'}")
-        print(f"Routing labels: {json.dumps(labels or {}, sort_keys=True)}")
+        if args.command != "models":
+            print(f"Provider override: {provider or '<none; server-side automatic routing>'}")
+            print(f"Routing labels: {json.dumps(labels or {}, sort_keys=True)}")
         if args.command == "executions":
             preview = payload["request_preview"]
             print(f"Execution kind: {preview.get('kind', 'agent_run')}")
             print(f"Model: {preview.get('model', '<unknown>')}")
             print(f"Instruction present: {'yes' if preview.get('has_instruction') else 'no'}")
             print(f"Stream: {'yes' if preview.get('stream') else 'no'}")
+        elif args.command == "models":
+            print("Operation: GET /v1/models")
         else:
             print(f"Skill: {args.skill}")
             print(f"Input keys: {', '.join(payload['input_keys']) if payload['input_keys'] else '<none>'}")
@@ -430,6 +518,14 @@ def main() -> int:
                 "Authorization": f"Bearer {api_key}",
             },
             payload=body,
+        )
+    elif args.command == "models":
+        status, payload, response_headers = request_without_body(
+            url=f"{server_url}/v1/models",
+            method="GET",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+            },
         )
     else:
         raise SystemExit(f"Unsupported command: {args.command}")
