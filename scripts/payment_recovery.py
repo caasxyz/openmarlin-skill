@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Guided 402 recovery and top-up helpers for claw-federation."""
+"""Guided 402 recovery and top-up helpers for OpenMarlin."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 import urllib.error
@@ -33,18 +32,19 @@ DEFAULT_POLL_INTERVAL_SECONDS = 2.0
 
 
 def parse_args() -> argparse.Namespace:
-    default_server_url, server_url_source = get_skill_env("CLAW_FEDERATION_SERVER_URL")
+    default_server_url, server_url_source = get_skill_env("OPENMARLIN_SERVER_URL")
+    default_api_key, _api_key_source = get_skill_env("OPENMARLIN_PLATFORM_API_KEY")
     common = argparse.ArgumentParser(add_help=False)
     common.set_defaults(_server_url_source=server_url_source)
     common.add_argument(
         "--server-url",
         default=(default_server_url or "").strip(),
-        help="Base URL for claw-federation-server. Defaults to CLAW_FEDERATION_SERVER_URL, then OpenClaw skill config.",
+        help="Base URL for the OpenMarlin server. Defaults to OPENMARLIN_SERVER_URL, then OpenClaw skill config.",
     )
     common.add_argument(
         "--api-key",
-        default=os.environ.get("CLAW_FEDERATION_PLATFORM_API_KEY", "").strip(),
-        help="Platform API key. Defaults to CLAW_FEDERATION_PLATFORM_API_KEY, then OpenClaw auth-profiles.json.",
+        default=(default_api_key or "").strip(),
+        help="Platform API key. Defaults to OPENMARLIN_PLATFORM_API_KEY, then OpenClaw auth-profiles.json.",
     )
     common.add_argument(
         "--profile-id",
@@ -68,7 +68,7 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser = argparse.ArgumentParser(
-        description="Handle structured 402 recovery and top-up flows for claw-federation.",
+        description="Handle structured 402 recovery and top-up flows for OpenMarlin.",
         parents=[common],
     )
 
@@ -138,7 +138,7 @@ def resolve_api_key(raw_api_key: str, profile_id: str, agent_id: str) -> tuple[s
         return key, f"auth-profiles:{auth_store_path}", None
 
     return None, None, (
-        "Missing platform API key. Set CLAW_FEDERATION_PLATFORM_API_KEY, pass --api-key, "
+        "Missing platform API key. Set OPENMARLIN_PLATFORM_API_KEY, pass --api-key, "
         "or bootstrap and store a key first."
     )
 

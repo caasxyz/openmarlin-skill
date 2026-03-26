@@ -1,4 +1,4 @@
-"""Helpers for storing claw-federation platform credentials in OpenClaw auth profiles."""
+"""Helpers for storing OpenMarlin platform credentials in OpenClaw auth profiles."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
-PLATFORM_AUTH_PROVIDER = "claw-federation-platform"
+PLATFORM_AUTH_PROVIDER = "openmarlin-platform"
 DEFAULT_PROFILE_ID = f"{PLATFORM_AUTH_PROVIDER}:default"
 DEFAULT_AGENT_ID = "main"
 

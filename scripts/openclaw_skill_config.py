@@ -10,8 +10,8 @@ import urllib.error
 import urllib.request
 
 
-SKILL_KEY = "claw-federation-registration"
-SKILL_KEY_ALIASES = [SKILL_KEY, "claw-federation"]
+SKILL_KEY = "openmarlin-registration"
+SKILL_KEY_ALIASES = [SKILL_KEY]
 PRIMARY_CONFIG_PATH = Path.home() / ".openclaw" / "openclaw.json"
 
 
@@ -92,21 +92,21 @@ def build_server_url_setup_message(*, resolved_value: str | None = None, reason:
     if reason:
         lines.append(reason)
     headline = (
-        "OpenClaw federation is configured, but the current server URL could not be reached."
+        "OpenMarlin is configured, but the current server URL could not be reached."
         if resolved_value
-        else "OpenClaw federation is not configured yet."
+        else "OpenMarlin is not configured yet."
     )
     lines.extend(
         [
             headline,
             "",
-            "Set CLAW_FEDERATION_SERVER_URL to your claw-federation-server base URL.",
+            "Set OPENMARLIN_SERVER_URL to your OpenMarlin server base URL.",
             "",
             "One-off shell setup:",
-            '  export CLAW_FEDERATION_SERVER_URL="https://your-server.example.com"',
+            '  export OPENMARLIN_SERVER_URL="https://your-server.example.com"',
             "",
             f"Persisted OpenClaw config: {preferred_openclaw_config_path()}",
-            f'  skills.entries["{SKILL_KEY}"].env.CLAW_FEDERATION_SERVER_URL = "https://your-server.example.com"',
+            f'  skills.entries["{SKILL_KEY}"].env.OPENMARLIN_SERVER_URL = "https://your-server.example.com"',
             "",
             f"If available in your OpenClaw build, prefer `openclaw skills update-config {SKILL_KEY}` or the skill settings UI.",
         ]
@@ -132,7 +132,7 @@ def require_server_url(raw: str) -> str:
 def build_server_connection_error(server_url: str, reason: str) -> str:
     return build_server_url_setup_message(
         resolved_value=server_url,
-        reason=f"Request could not reach claw-federation-server: {reason}",
+        reason=f"Request could not reach the OpenMarlin server: {reason}",
     )
 
 

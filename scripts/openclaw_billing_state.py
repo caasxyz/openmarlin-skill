@@ -1,4 +1,4 @@
-"""Helpers for storing claw-federation billing state in OpenClaw agent data."""
+"""Helpers for storing OpenMarlin billing state in OpenClaw agent data."""
 
 from __future__ import annotations
 

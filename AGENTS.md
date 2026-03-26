@@ -1,10 +1,10 @@
-# AGENTS.md — claw-federation-skill
+# AGENTS.md — openmarlin-skill
 
 ## Project Goal
-Implement the OpenClaw skill-side UX for the claw federation platform.
+Implement the OpenClaw skill-side UX for the OpenMarlin platform.
 
 This repository owns the guided user flows that sit on top of
-`claw-federation-server`, including:
+`openmarlin-server`, including:
 
 - registration and account linking
 - platform API key bootstrap

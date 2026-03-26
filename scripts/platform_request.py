@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Authenticated claw-federation platform requests with routing hints."""
+"""Authenticated OpenMarlin platform requests with routing hints."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import urllib.error
 import urllib.parse
@@ -24,12 +23,12 @@ from payment_recovery import build_recovery_commands, parse_insufficient_balance
 
 
 ERROR_HELP = {
-    "missing_api_key": "Missing platform API key. Export CLAW_FEDERATION_PLATFORM_API_KEY first.",
+    "missing_api_key": "Missing platform API key. Export OPENMARLIN_PLATFORM_API_KEY first.",
     "invalid_api_key": "The platform API key was rejected. Re-bootstrap a fresh key and retry.",
     "api_key_inactive": "The platform API key is no longer active. Bootstrap a replacement key.",
     "workspace_missing": "The API key resolved, but its workspace no longer exists on the server.",
     "account_missing": "The API key resolved, but its owning account no longer exists on the server.",
-    "invalid_routing_labels": "Routing labels were invalid. Use repeated --label key=value flags or valid JSON in CLAW_FEDERATION_DEFAULT_ROUTING_LABELS.",
+    "invalid_routing_labels": "Routing labels were invalid. Use repeated --label key=value flags or valid JSON in OPENMARLIN_DEFAULT_ROUTING_LABELS.",
     "provider_unavailable": "The selected provider is not currently connected.",
     "provider_label_mismatch": "The selected provider does not satisfy the requested routing hints.",
     "execution_provider_not_found": "The server could not find any eligible execution provider for this request. Retry with different labels, a different model, or an explicit --provider override.",
@@ -42,24 +41,25 @@ ERROR_HELP = {
 
 
 def parse_args() -> argparse.Namespace:
-    default_server_url, server_url_source = get_skill_env("CLAW_FEDERATION_SERVER_URL")
-    default_provider, provider_source = get_skill_env("CLAW_FEDERATION_DEFAULT_PROVIDER_ID")
+    default_server_url, server_url_source = get_skill_env("OPENMARLIN_SERVER_URL")
+    default_api_key, _api_key_source = get_skill_env("OPENMARLIN_PLATFORM_API_KEY")
+    default_provider, provider_source = get_skill_env("OPENMARLIN_DEFAULT_PROVIDER_ID")
     common = argparse.ArgumentParser(add_help=False)
     common.set_defaults(_server_url_source=server_url_source, _provider_source=provider_source)
     common.add_argument(
         "--server-url",
         default=(default_server_url or "").strip(),
-        help="Base URL for claw-federation-server. Defaults to CLAW_FEDERATION_SERVER_URL, then OpenClaw skill config.",
+        help="Base URL for the OpenMarlin server. Defaults to OPENMARLIN_SERVER_URL, then OpenClaw skill config.",
     )
     common.add_argument(
         "--api-key",
-        default=os.environ.get("CLAW_FEDERATION_PLATFORM_API_KEY", "").strip(),
-        help="Platform API key. Defaults to CLAW_FEDERATION_PLATFORM_API_KEY, then OpenClaw auth-profiles.json.",
+        default=(default_api_key or "").strip(),
+        help="Platform API key. Defaults to OPENMARLIN_PLATFORM_API_KEY, then OpenClaw auth-profiles.json.",
     )
     common.add_argument(
         "--provider",
         default=(default_provider or "").strip(),
-        help="Optional explicit provider override. Defaults to CLAW_FEDERATION_DEFAULT_PROVIDER_ID, then OpenClaw skill config.",
+        help="Optional explicit provider override. Defaults to OPENMARLIN_DEFAULT_PROVIDER_ID, then OpenClaw skill config.",
     )
     common.add_argument(
         "--label",
@@ -89,7 +89,7 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser = argparse.ArgumentParser(
-        description="Send authenticated claw-federation platform requests with optional provider overrides and routing hints.",
+        description="Send authenticated OpenMarlin platform requests with optional provider overrides and routing hints.",
         parents=[common],
     )
 
@@ -143,7 +143,7 @@ def resolve_api_key(raw_api_key: str, profile_id: str, agent_id: str) -> tuple[s
         return key, f"auth-profiles:{auth_store_path}", None
 
     return None, None, (
-        "Missing platform API key. Set CLAW_FEDERATION_PLATFORM_API_KEY, pass --api-key, "
+        "Missing platform API key. Set OPENMARLIN_PLATFORM_API_KEY, pass --api-key, "
         "or bootstrap with --store so the key is saved into OpenClaw auth-profiles.json."
     )
 
@@ -189,14 +189,14 @@ def parse_label_pairs(values: list[str]) -> dict[str, str]:
 
 def resolve_labels(cli_labels: list[str]) -> dict[str, str] | None:
     merged: dict[str, str] = {}
-    env_raw, _source = get_skill_env("CLAW_FEDERATION_DEFAULT_ROUTING_LABELS")
+    env_raw, _source = get_skill_env("OPENMARLIN_DEFAULT_ROUTING_LABELS")
     env_raw = (env_raw or "").strip()
     if env_raw:
-        env_labels = load_json_object(env_raw, source="CLAW_FEDERATION_DEFAULT_ROUTING_LABELS")
+        env_labels = load_json_object(env_raw, source="OPENMARLIN_DEFAULT_ROUTING_LABELS")
         for key, value in env_labels.items():
             if not isinstance(key, str) or not isinstance(value, str) or not key or not value.strip():
                 raise SystemExit(
-                    "CLAW_FEDERATION_DEFAULT_ROUTING_LABELS must be a JSON object of non-empty string values."
+                    "OPENMARLIN_DEFAULT_ROUTING_LABELS must be a JSON object of non-empty string values."
                 )
             merged[key] = value.strip()
 

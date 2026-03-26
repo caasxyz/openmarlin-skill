@@ -1,13 +1,13 @@
 ---
-name: claw-federation-registration
-description: "Guide platform registration, account linking, and server-routed provider selection for claw-federation in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, or send a native execution request with automatic routing, an explicit provider override, or simple routing hints. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
-metadata: {"openclaw":{"emoji":"🦞","homepage":"https://github.com/caasxyz/claw-federation-skill","skillKey":"claw-federation-registration","requires":{"bins":["python3"],"env":["CLAW_FEDERATION_SERVER_URL"]},"primaryEnv":"CLAW_FEDERATION_SERVER_URL","install":[{"id":"brew-python3","kind":"brew","formula":"python","bins":["python3"],"label":"Install Python 3 (brew)","os":["darwin"]}]}}
+name: openmarlin-registration
+description: "Guide platform registration, account linking, and server-routed provider selection for OpenMarlin in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, or send a native execution request with automatic routing, an explicit provider override, or simple routing hints. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
+metadata: {"openclaw":{"emoji":"🦞","homepage":"https://github.com/caasxyz/openmarlin-skill","skillKey":"openmarlin-registration","requires":{"bins":["python3"],"env":["OPENMARLIN_SERVER_URL"]},"primaryEnv":"OPENMARLIN_SERVER_URL","install":[{"id":"brew-python3","kind":"brew","formula":"python","bins":["python3"],"label":"Install Python 3 (brew)","os":["darwin"]}]}}
 ---
 
-# Claw Federation Registration
+# OpenMarlin Registration
 
-Use this skill when a user wants to create, connect, or resume a
-`claw-federation` platform account from inside OpenClaw.
+Use this skill when a user wants to create, connect, or resume an
+OpenMarlin platform account from inside OpenClaw.
 
 ## Core Rules
 
@@ -31,14 +31,14 @@ Use this skill when a user wants to create, connect, or resume a
 
 ## Trust And Secrets
 
-- Treat `CLAW_FEDERATION_SERVER_URL` as the only trusted API origin for federation registration, key bootstrap, routing, balance, and top-up calls.
+- Treat `OPENMARLIN_SERVER_URL` as the only trusted API origin for federation registration, key bootstrap, routing, balance, and top-up calls.
 - Treat browser handoff URLs as trusted only when they come directly from the server contract in `handoff.authorization_url`.
 - Do not reconstruct, guess, or rewrite WorkOS or web handoff URLs from device codes, callback state, copied text, or unrelated user input.
 - If the server does not return `handoff.authorization_url`, stop treating browser handoff as ready and explain that the deployment is missing the required server-side contract.
 - Treat future browser or web glue surfaces as trusted only when they are explicitly referenced by the trusted server response or by documented deployment configuration owned by the same operator.
 - Never ask the user to paste platform API keys into chat if the skill can store or load them through OpenClaw auth profiles.
 - Store issued platform API keys only in OpenClaw auth-profile storage, not in ordinary skill config, free-form notes, or browser URL parameters.
-- Treat `CLAW_FEDERATION_PLATFORM_API_KEY` as a temporary operator override for local debugging, not the preferred long-term storage path.
+- Treat `OPENMARLIN_PLATFORM_API_KEY` as a temporary operator override for local debugging, not the preferred long-term storage path.
 - Do not send platform API keys to browser handoff URLs, Stripe checkout URLs, or any origin other than the configured federation server.
 - When reporting status back to the user, show where the key was stored or loaded from, but do not echo the raw secret unless the active command explicitly returns it.
 
@@ -170,7 +170,7 @@ Inside OpenClaw, balance management should therefore use:
 Required:
 
 ```bash
-export CLAW_FEDERATION_SERVER_URL="http://127.0.0.1:3000"
+export OPENMARLIN_SERVER_URL="http://127.0.0.1:3000"
 ```
 
 OpenClaw-persisted skill config is also supported. These helpers resolve
@@ -178,19 +178,19 @@ required and default values from:
 
 1. process env
 2. `~/.openclaw/openclaw.json` under
-   `skills.entries["claw-federation-registration"].env`
+   `skills.entries["openmarlin-registration"].env`
 
 That means the user does not need to hand-edit config files as long as
 OpenClaw writes the skill config on their behalf.
 
 The skill metadata also advertises the supported OpenClaw installer hint for
-`python3` and marks `CLAW_FEDERATION_SERVER_URL` as the primary required env.
+`python3` and marks `OPENMARLIN_SERVER_URL` as the primary required env.
 More detailed env onboarding still lives in this Setup section.
 
 Optional direct API key override:
 
 ```bash
-export CLAW_FEDERATION_PLATFORM_API_KEY="claw_wsk_..."
+export OPENMARLIN_PLATFORM_API_KEY="claw_wsk_..."
 ```
 
 After bootstrap, this env var is no longer required if you store the key into
@@ -199,8 +199,8 @@ OpenClaw auth profiles.
 Optional request-routing defaults:
 
 ```bash
-export CLAW_FEDERATION_DEFAULT_PROVIDER_ID="node-a"
-export CLAW_FEDERATION_DEFAULT_ROUTING_LABELS='{"region":"ap-sg"}'
+export OPENMARLIN_DEFAULT_PROVIDER_ID="node-a"
+export OPENMARLIN_DEFAULT_ROUTING_LABELS='{"region":"ap-sg"}'
 ```
 
 If the server does not return `handoff.authorization_url`, keep the user in
@@ -525,7 +525,7 @@ The returned `secret` is the steady-state platform credential for OpenClaw.
 
 - prefer OpenClaw auth profiles over plain repo files or ordinary config
 - store the key in `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`
-  using the default profile `claw-federation-platform:default`
+  using the default profile `openmarlin-platform:default`
 - after storing with `--store`, later `platform_request.py` calls can reuse the
   key automatically without re-exporting it
 - do not write the key into ordinary `openclaw.json` fields

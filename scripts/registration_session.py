@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Helpers for claw-federation registration sessions."""
+"""Helpers for OpenMarlin registration sessions."""
 
 from __future__ import annotations
 
@@ -34,15 +34,15 @@ DEFAULT_API_KEY_LABEL = "OpenClaw bootstrap"
 
 
 def parse_args() -> argparse.Namespace:
-    default_server_url, server_url_source = get_skill_env("CLAW_FEDERATION_SERVER_URL")
+    default_server_url, server_url_source = get_skill_env("OPENMARLIN_SERVER_URL")
     parser = argparse.ArgumentParser(
-        description="Create, inspect, and poll claw-federation registration sessions."
+        description="Create, inspect, and poll OpenMarlin registration sessions."
     )
     parser.set_defaults(_server_url_source=server_url_source)
     parser.add_argument(
         "--server-url",
         default=(default_server_url or "").strip(),
-        help="Base URL for claw-federation-server. Defaults to CLAW_FEDERATION_SERVER_URL, then OpenClaw skill config.",
+        help="Base URL for the OpenMarlin server. Defaults to OPENMARLIN_SERVER_URL, then OpenClaw skill config.",
     )
     json_parent = argparse.ArgumentParser(add_help=False)
     json_parent.add_argument(
@@ -431,7 +431,7 @@ def print_api_key_issue(result: dict[str, Any], session: dict[str, Any] | None =
     print(f"Last used at: {api_key.get('last_used_at', '<unknown>')}")
     print(f"Secret: {result.get('secret', '<missing>')}")
     print("Export:")
-    print(f"  export CLAW_FEDERATION_PLATFORM_API_KEY='{result.get('secret', '')}'")
+    print(f"  export OPENMARLIN_PLATFORM_API_KEY='{result.get('secret', '')}'")
 
 
 def build_storage_metadata(
