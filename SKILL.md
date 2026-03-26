@@ -1,13 +1,32 @@
 ---
 name: openmarlin-registration
 description: "Guide platform registration, account linking, and server-routed provider selection for OpenMarlin in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, or send a native execution request with automatic routing, an explicit provider override, or simple routing hints. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
-metadata: {"openclaw":{"emoji":"🦞","homepage":"https://github.com/caasxyz/openmarlin-skill","skillKey":"openmarlin-registration","requires":{"bins":["python3"],"env":["OPENMARLIN_SERVER_URL"]},"primaryEnv":"OPENMARLIN_SERVER_URL","install":[{"id":"brew-python3","kind":"brew","formula":"python","bins":["python3"],"label":"Install Python 3 (brew)","os":["darwin"]}]}}
+metadata: {"openclaw":{"emoji":"🦞","homepage":"https://github.com/caasxyz/openmarlin-skill","skillKey":"openmarlin-registration","requires":{"bins":["python3"],"env":["OPENMARLIN_SERVER_URL"],"files":[{"path":"SKILL.md"},{"path":"scripts/*.py"}]},"primaryEnv":"OPENMARLIN_SERVER_URL","install":[{"id":"brew-python3","kind":"brew","formula":"python","bins":["python3"],"label":"Install Python 3 (brew)","os":["darwin"]}]}}
 ---
 
 # OpenMarlin Registration
 
 Use this skill when a user wants to create, connect, or resume an
 OpenMarlin platform account from inside OpenClaw.
+
+## Installation
+
+This skill is distributed as a directory, not as a standalone Markdown file.
+When installing from a raw URL or a git checkout, install the whole skill
+directory instead of copying only `SKILL.md`.
+
+Required files:
+
+- `SKILL.md`
+- `scripts/registration_session.py`
+- `scripts/platform_request.py`
+- `scripts/payment_recovery.py`
+- `scripts/openclaw_billing_state.py`
+- `scripts/openclaw_platform_auth.py`
+- `scripts/openclaw_skill_config.py`
+
+If `SKILL.md` is present without the sibling `scripts/` files, commands in this
+skill will fail with missing-file errors on first use.
 
 ## Core Rules
 
