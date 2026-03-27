@@ -19,7 +19,7 @@ required browser handoff steps.
 Official links:
 
 - Skill repo: [https://github.com/caasxyz/openmarlin-skill](https://github.com/caasxyz/openmarlin-skill)
-- Server repo: [https://github.com/caasxyz/claw-federation-server](https://github.com/caasxyz/claw-federation-server)
+- Server repo: [https://github.com/caasxyz/openmarlin-server](https://github.com/caasxyz/openmarlin-server)
 
 ## Installation
 

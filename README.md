@@ -11,7 +11,7 @@ execution, and prepaid billing flows.
 Official links:
 
 - Homepage: [https://github.com/caasxyz/openmarlin-skill](https://github.com/caasxyz/openmarlin-skill)
-- Server: [https://github.com/caasxyz/claw-federation-server](https://github.com/caasxyz/claw-federation-server)
+- Server: [https://github.com/caasxyz/openmarlin-server](https://github.com/caasxyz/openmarlin-server)
 
 This repo covers the OpenClaw-first UX for:
 
