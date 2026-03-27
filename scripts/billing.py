@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guided 402 recovery and top-up helpers for OpenMarlin."""
+"""Billing, top-up, and 402 recovery helpers for OpenMarlin."""
 
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser = argparse.ArgumentParser(
-        description="Handle structured 402 recovery and top-up flows for OpenMarlin.",
+        description="Handle OpenMarlin billing, top-up, and structured 402 recovery flows.",
         parents=[common],
     )
 
@@ -259,8 +259,8 @@ def build_recovery_commands(summary: dict[str, Any]) -> list[str]:
     amount = summary["shortfall"]["amount"]
     rendered_amount = int(amount) if float(amount).is_integer() else amount
     return [
-        f"python3 scripts/payment_recovery.py create-topup --amount {rendered_amount}",
-        "python3 scripts/payment_recovery.py watch --session-id <topup-session-id>",
+        f"python3 scripts/billing.py create-topup --amount {rendered_amount}",
+        "python3 scripts/billing.py watch --session-id <topup-session-id>",
     ]
 
 
@@ -655,7 +655,7 @@ def main() -> int:
                 print_topup_session(auto_recovered["response"])
                 print(
                     "Continue in OpenClaw with: "
-                    f"python3 scripts/payment_recovery.py watch --session-id {auto_recovered['response'].get('topup_session_id', '<topup-session-id>')}"
+                    f"python3 scripts/billing.py watch --session-id {auto_recovered['response'].get('topup_session_id', '<topup-session-id>')}"
                 )
         return 0
 

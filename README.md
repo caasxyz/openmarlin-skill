@@ -29,7 +29,7 @@ Primary entrypoints:
 - `scripts/platform_request.py` for authenticated `/invoke` or `/v1/executions`
   requests with server-side automatic routing, optional provider overrides, and
   routing hints
-- `scripts/payment_recovery.py` for structured 402 recovery guidance and
+- `scripts/billing.py` for structured 402 recovery guidance and
   authenticated top-up session handling, authoritative balance reads, local
   balance snapshots, and tracked
   top-up history
@@ -83,7 +83,7 @@ The helper scripts remain available relative to that installed skill directory:
 ```text
 ~/.openclaw/workspace/skills/openmarlin/scripts/registration_session.py
 ~/.openclaw/workspace/skills/openmarlin/scripts/platform_request.py
-~/.openclaw/workspace/skills/openmarlin/scripts/payment_recovery.py
+~/.openclaw/workspace/skills/openmarlin/scripts/billing.py
 ```
 
 ## Requirements
@@ -164,9 +164,9 @@ python3 scripts/registration_session.py --server-url https://your-server.example
 python3 scripts/platform_request.py models
 python3 scripts/platform_request.py executions --body-json '{"instruction":"hello","model":"gpt-5.4"}'
 python3 scripts/platform_request.py executions --dry-run --server-url https://your-server.example.com --api-key claw_wsk_placeholder --body-json '{"instruction":"hello","model":"gpt-5.4"}'
-python3 scripts/payment_recovery.py activity
-python3 scripts/payment_recovery.py explain-402 --response-file /path/to/402.json
-python3 scripts/payment_recovery.py explain-402 --auto-recover --response-file /path/to/402.json
+python3 scripts/billing.py activity
+python3 scripts/billing.py explain-402 --response-file /path/to/402.json
+python3 scripts/billing.py explain-402 --auto-recover --response-file /path/to/402.json
 ```
 
 For full behavior and flow guidance, use:

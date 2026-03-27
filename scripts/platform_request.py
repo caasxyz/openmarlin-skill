@@ -19,7 +19,7 @@ from openclaw_skill_config import (
 )
 from openclaw_billing_state import record_balance_snapshot
 from openclaw_platform_auth import DEFAULT_AGENT_ID, DEFAULT_PROFILE_ID, resolve_platform_api_key
-from payment_recovery import build_recovery_commands, parse_insufficient_balance
+from billing import build_recovery_commands, parse_insufficient_balance
 
 
 JsonValue = Any

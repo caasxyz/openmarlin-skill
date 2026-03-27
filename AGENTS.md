@@ -63,7 +63,7 @@ For local validation, these localhost-oriented commands are also common:
 
 - `python3 scripts/registration_session.py ...`
 - `python3 scripts/platform_request.py ...`
-- `python3 scripts/payment_recovery.py ...`
+- `python3 scripts/billing.py ...`
 - `PORT=312x node --import tsx src/index.ts` in the server repo
 
 Do not request broad approvals when a narrower prefix will do. Prefer the

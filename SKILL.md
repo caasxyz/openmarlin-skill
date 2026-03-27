@@ -32,7 +32,7 @@ Required files:
 - `SKILL.md`
 - `scripts/registration_session.py`
 - `scripts/platform_request.py`
-- `scripts/payment_recovery.py`
+- `scripts/billing.py`
 - `scripts/openclaw_billing_state.py`
 - `scripts/openclaw_platform_auth.py`
 - `scripts/openclaw_skill_config.py`
@@ -421,14 +421,14 @@ python3 scripts/registration_session.py bootstrap \
 Explain a structured 402 response and get the next recovery steps:
 
 ```bash
-python3 scripts/payment_recovery.py explain-402 \
+python3 scripts/billing.py explain-402 \
   --response-json '{"error_code":"insufficient_balance","message":"Workspace balance is insufficient for this request.","workspace_id":"ws_123","current_balance":{"amount":0,"unit":"credits"},"required_balance":{"amount":1,"unit":"credits"}}'
 ```
 
 Dry-run 402 recovery setup without creating anything:
 
 ```bash
-python3 scripts/payment_recovery.py explain-402 \
+python3 scripts/billing.py explain-402 \
   --dry-run \
   --server-url https://your-server.example.com \
   --api-key claw_wsk_placeholder \
@@ -438,7 +438,7 @@ python3 scripts/payment_recovery.py explain-402 \
 Explain a structured 402 response and immediately create the top-up session:
 
 ```bash
-python3 scripts/payment_recovery.py explain-402 \
+python3 scripts/billing.py explain-402 \
   --auto-recover \
   --response-json '{"error_code":"insufficient_balance","message":"Workspace balance is insufficient for this request.","workspace_id":"ws_123","current_balance":{"amount":0,"unit":"credits"},"required_balance":{"amount":1,"unit":"credits"}}'
 ```
@@ -446,40 +446,40 @@ python3 scripts/payment_recovery.py explain-402 \
 Create a top-up session directly from the 402 shortfall:
 
 ```bash
-python3 scripts/payment_recovery.py create-topup \
+python3 scripts/billing.py create-topup \
   --response-json '{"error_code":"insufficient_balance","message":"Workspace balance is insufficient for this request.","workspace_id":"ws_123","current_balance":{"amount":0,"unit":"credits"},"required_balance":{"amount":1,"unit":"credits"}}'
 ```
 
 Check or wait on a top-up session:
 
 ```bash
-python3 scripts/payment_recovery.py status --session-id <topup-session-id>
-python3 scripts/payment_recovery.py watch --session-id <topup-session-id>
+python3 scripts/billing.py status --session-id <topup-session-id>
+python3 scripts/billing.py watch --session-id <topup-session-id>
 ```
 
 Show the current authoritative balance for the authenticated workspace:
 
 ```bash
-python3 scripts/payment_recovery.py balance --workspace-id <workspace-id>
+python3 scripts/billing.py balance --workspace-id <workspace-id>
 ```
 
 Refresh local 402 context first, then fetch and store the authoritative balance:
 
 ```bash
-python3 scripts/payment_recovery.py balance \
+python3 scripts/billing.py balance \
   --response-json '{"error_code":"insufficient_balance","message":"Workspace balance is insufficient for this request.","workspace_id":"ws_123","current_balance":{"amount":0,"unit":"credits"},"required_balance":{"amount":1,"unit":"credits"}}'
 ```
 
 Show tracked top-up history from local OpenClaw billing state:
 
 ```bash
-python3 scripts/payment_recovery.py history --workspace-id <workspace-id>
+python3 scripts/billing.py history --workspace-id <workspace-id>
 ```
 
 Show recent caller billing activity from the server usage-event and ledger APIs:
 
 ```bash
-python3 scripts/payment_recovery.py activity
+python3 scripts/billing.py activity
 ```
 
 List currently available execution models before choosing a model id:
@@ -667,8 +667,8 @@ When the server returns a structured `402 insufficient_balance` response:
 - tell the user this is a recoverable billing state, not a broken request
 - prefer `explain-402 --auto-recover` when the user wants you to carry them directly into the next step
 - offer the next two actions inside OpenClaw:
-  `python3 scripts/payment_recovery.py create-topup ...`
-  `python3 scripts/payment_recovery.py watch --session-id <topup-session-id>`
+  `python3 scripts/billing.py create-topup ...`
+  `python3 scripts/billing.py watch --session-id <topup-session-id>`
 - persist the `current_balance` snapshot into OpenClaw billing state so later explanations have server-sourced context
 - keep the browser handoff limited to the returned Stripe `checkout_url`
 
