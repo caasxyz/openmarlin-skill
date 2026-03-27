@@ -164,6 +164,7 @@ python3 scripts/registration_session.py --server-url https://your-server.example
 python3 scripts/platform_request.py models
 python3 scripts/platform_request.py executions --body-json '{"instruction":"hello","model":"gpt-5.4"}'
 python3 scripts/platform_request.py executions --dry-run --server-url https://your-server.example.com --api-key claw_wsk_placeholder --body-json '{"instruction":"hello","model":"gpt-5.4"}'
+python3 scripts/payment_recovery.py activity
 python3 scripts/payment_recovery.py explain-402 --response-file /path/to/402.json
 python3 scripts/payment_recovery.py explain-402 --auto-recover --response-file /path/to/402.json
 ```
@@ -179,4 +180,5 @@ For full behavior and flow guidance, use:
 - List currently available execution models before choosing a model id.
 - Send routed execution requests with automatic provider selection.
 - Override routing with an explicit provider id or simple labels.
+- Inspect recent prepaid usage and ledger activity from the server APIs.
 - Recover from `402 Payment Required` by creating or resuming a top-up flow.

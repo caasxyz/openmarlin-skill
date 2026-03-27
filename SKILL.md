@@ -69,6 +69,7 @@ After registration completes, the next thing the user usually needs is one of:
 - Pin a request to a specific provider with `--provider`.
 - Add simple routing hints with `--label key=value`.
 - Inspect balance, explain `402` responses, and resume top-up flows.
+- Inspect recent prepaid usage and caller ledger activity.
 
 ## Core Rules
 
@@ -219,12 +220,18 @@ For current balance reads, the public authenticated balance contract is:
 
 - `GET /v1/balance`
 
+For recent caller billing history, the public authenticated billing contracts are:
+
+- `GET /v1/usage-events`
+- `GET /v1/ledger`
+
 Inside OpenClaw, balance management should therefore use:
 
 - `GET /v1/balance` as the primary exact balance source
 - the last server-provided structured `402` balance snapshot as supporting context
 - tracked top-up session state for the current workspace
 - `credited_ledger_entry_id` to show when a Stripe-backed credit has landed
+- `GET /v1/usage-events` and `GET /v1/ledger` for recent caller billing activity
 
 ## Setup
 
@@ -467,6 +474,12 @@ Show tracked top-up history from local OpenClaw billing state:
 
 ```bash
 python3 scripts/payment_recovery.py history --workspace-id <workspace-id>
+```
+
+Show recent caller billing activity from the server usage-event and ledger APIs:
+
+```bash
+python3 scripts/payment_recovery.py activity
 ```
 
 List currently available execution models before choosing a model id:

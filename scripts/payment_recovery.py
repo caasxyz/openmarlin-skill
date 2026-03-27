@@ -101,6 +101,13 @@ def parse_args() -> argparse.Namespace:
     history.add_argument("--workspace-id", help="Optional workspace ID filter.")
     history.add_argument("--limit", type=int, default=10, help="Maximum sessions to show. Default: 10.")
 
+    activity = subparsers.add_parser(
+        "activity",
+        help="Show recent caller billing activity from /v1/usage-events and /v1/ledger.",
+        parents=[common],
+    )
+    activity.add_argument("--limit", type=int, default=10, help="Maximum usage events and ledger entries to show. Default: 10.")
+
     status = subparsers.add_parser("status", help="Fetch the current top-up session state.", parents=[common])
     status.add_argument("--session-id", required=True, help="Top-up session ID.")
 
@@ -310,6 +317,14 @@ def fetch_authoritative_balance(server_url: str, auth_headers: dict[str, str]) -
     return request_json(f"{server_url}/v1/balance", headers=auth_headers)
 
 
+def fetch_usage_events(server_url: str, auth_headers: dict[str, str]) -> tuple[int, dict[str, Any] | str]:
+    return request_json(f"{server_url}/v1/usage-events", headers=auth_headers)
+
+
+def fetch_ledger_entries(server_url: str, auth_headers: dict[str, str]) -> tuple[int, dict[str, Any] | str]:
+    return request_json(f"{server_url}/v1/ledger", headers=auth_headers)
+
+
 def update_balance_from_completed_topup(
     session: dict[str, Any],
     *,
@@ -431,6 +446,71 @@ def print_history(sessions: list[dict[str, Any]], state_path: str) -> None:
         )
 
 
+def list_payload_data(payload: dict[str, Any] | str, *, field_name: str) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        raise SystemExit(f"Server returned a non-object payload for {field_name}.")
+    data = payload.get("data")
+    if not isinstance(data, list):
+        raise SystemExit(f"Server returned an invalid list payload for {field_name}.")
+    return [item for item in data if isinstance(item, dict)]
+
+
+def sort_records_by_created_at(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(records, key=lambda item: str(item.get("created_at", "")), reverse=True)
+
+
+def trim_records(records: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
+    return sort_records_by_created_at(records)[:limit]
+
+
+def print_usage_events(events: list[dict[str, Any]]) -> None:
+    if not events:
+        print("Recent usage events: none")
+        return
+    print("Recent usage events:")
+    for event in events:
+        measured_units = event.get("measured_units")
+        measured_text = "<unknown>"
+        if isinstance(measured_units, (int, float)):
+            measured_text = str(measured_units)
+        settlement = event.get("settlement")
+        settlement_text = ""
+        if isinstance(settlement, dict):
+            amount = settlement.get("amount")
+            unit = settlement.get("unit")
+            if isinstance(amount, (int, float)) and isinstance(unit, str):
+                settlement_text = f" settled={amount} {unit}"
+        print(
+            f"- {event.get('created_at', '<unknown>')} "
+            f"capability={event.get('capability', '<unknown>')} "
+            f"status={event.get('status', '<unknown>')} "
+            f"provider={event.get('provider_id', '<unknown>')} "
+            f"request={event.get('request_id', '<unknown>')} "
+            f"units={measured_text}{settlement_text}"
+        )
+
+
+def print_ledger_entries(entries: list[dict[str, Any]]) -> None:
+    if not entries:
+        print("Recent ledger entries: none")
+        return
+    print("Recent ledger entries:")
+    for entry in entries:
+        amount = entry.get("amount")
+        amount_text = "<unknown>"
+        if isinstance(amount, dict):
+            amount_text = f"{amount.get('amount', '<unknown>')} {amount.get('unit', '<unknown>')}"
+        print(
+            f"- {entry.get('created_at', '<unknown>')} "
+            f"type={entry.get('type', '<unknown>')} "
+            f"status={entry.get('status', '<unknown>')} "
+            f"amount={amount_text} "
+            f"reference_id={entry.get('reference_id', '<unknown>')}"
+        )
+
+
 def print_dry_run(args: argparse.Namespace) -> int:
     server_url = require_server_url(args.server_url)
     reachable, detail = probe_server_openapi(server_url)
@@ -443,7 +523,7 @@ def print_dry_run(args: argparse.Namespace) -> int:
         "connectivity": detail,
     }
 
-    needs_api_key = args.command in {"create-topup", "status", "watch", "balance"} or (
+    needs_api_key = args.command in {"create-topup", "status", "watch", "balance", "activity"} or (
         args.command == "explain-402" and args.auto_recover
     )
     if needs_api_key:
@@ -473,6 +553,9 @@ def print_dry_run(args: argparse.Namespace) -> int:
     elif args.command == "history":
         payload["workspace_id"] = args.workspace_id
         payload["limit"] = args.limit
+    elif args.command == "activity":
+        payload["limit"] = args.limit
+        payload["operations"] = ["GET /v1/usage-events", "GET /v1/ledger"]
 
     if args.json:
         print(json.dumps(payload, indent=2, sort_keys=True))
@@ -498,6 +581,9 @@ def print_dry_run(args: argparse.Namespace) -> int:
             print(f"Session ID: {payload['session_id']}")
         elif args.command == "history":
             print(f"Limit: {payload['limit']}")
+        elif args.command == "activity":
+            print(f"Limit: {payload['limit']}")
+            print("Operations: GET /v1/usage-events, GET /v1/ledger")
     return 0 if payload["ok"] else 1
 
 
@@ -654,6 +740,61 @@ def main() -> int:
             print(json.dumps({"ok": True, "billing_state_path": state_path, "sessions": sessions}, indent=2, sort_keys=True))
         else:
             print_history(sessions, state_path)
+        return 0
+
+    if args.command == "activity":
+        server_url = require_server_url(args.server_url)
+        api_key, api_key_source = resolve_api_key_or_exit(args.api_key, args.profile_id, args.agent_id)
+        auth_headers = {"Authorization": f"Bearer {api_key}"}
+
+        usage_status, usage_payload = fetch_usage_events(server_url, auth_headers)
+        ledger_status, ledger_payload = fetch_ledger_entries(server_url, auth_headers)
+
+        if usage_status >= 400 or ledger_status >= 400:
+            if args.json:
+                print(
+                    json.dumps(
+                        {
+                            "ok": False,
+                            "api_key_source": api_key_source,
+                            "usage_events_status": usage_status,
+                            "usage_events_response": usage_payload,
+                            "ledger_status": ledger_status,
+                            "ledger_response": ledger_payload,
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                )
+            else:
+                raise SystemExit(
+                    "Unable to fetch recent billing activity: "
+                    f"usage-events HTTP {usage_status}, ledger HTTP {ledger_status}."
+                )
+            return 1
+
+        usage_events = trim_records(list_payload_data(usage_payload, field_name="GET /v1/usage-events"), limit=args.limit)
+        ledger_entries = trim_records(list_payload_data(ledger_payload, field_name="GET /v1/ledger"), limit=args.limit)
+
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "api_key_source": api_key_source,
+                        "usage_events_status": usage_status,
+                        "usage_events": usage_events,
+                        "ledger_status": ledger_status,
+                        "ledger_entries": ledger_entries,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+        else:
+            print(f"API key source: {api_key_source}")
+            print_usage_events(usage_events)
+            print_ledger_entries(ledger_entries)
         return 0
 
     server_url = require_server_url(args.server_url)
