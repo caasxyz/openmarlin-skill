@@ -9,6 +9,18 @@ metadata: {"openclaw":{"emoji":"🦞","homepage":"https://github.com/caasxyz/ope
 Use this skill when a user wants to create, connect, or resume an
 OpenMarlin platform account from inside OpenClaw.
 
+## Quick Summary
+
+OpenMarlin lets OpenClaw users register an account, bootstrap a workspace API
+key, discover available models, send routed execution requests, and recover
+from prepaid billing failures without leaving the OpenClaw-led flow except for
+required browser handoff steps.
+
+Official links:
+
+- Skill repo: [https://github.com/caasxyz/openmarlin-skill](https://github.com/caasxyz/openmarlin-skill)
+- Server repo: [https://github.com/caasxyz/claw-federation-server](https://github.com/caasxyz/claw-federation-server)
+
 ## Installation
 
 This skill is distributed as a directory, not as a standalone Markdown file.
@@ -27,6 +39,36 @@ Required files:
 
 If `SKILL.md` is present without the sibling `scripts/` files, commands in this
 skill will fail with missing-file errors on first use.
+
+## After Install
+
+Tell the user the next step plainly instead of assuming they know the flow.
+
+Recommended first actions:
+
+1. Confirm the configured `OPENMARLIN_SERVER_URL`.
+2. Start registration with `python3 scripts/registration_session.py create`.
+3. Resume or poll with `watch` until the registration session completes.
+4. Bootstrap and store the first workspace API key with `bootstrap --store`.
+5. Call `python3 scripts/platform_request.py models` so the user can see valid model ids before picking one.
+6. Send the first execution request or invoke call.
+
+After registration completes, the next thing the user usually needs is one of:
+
+- bootstrap and store the first workspace API key
+- list available models
+- send a first routed execution request
+- recover from a `402 Payment Required` response
+
+## What You Can Do Now
+
+- Register a new OpenMarlin account or connect an existing one.
+- Bootstrap and store a workspace API key in OpenClaw auth profiles.
+- Discover available execution models from `/v1/models`.
+- Send an execution request with server-side automatic routing.
+- Pin a request to a specific provider with `--provider`.
+- Add simple routing hints with `--label key=value`.
+- Inspect balance, explain `402` responses, and resume top-up flows.
 
 ## Core Rules
 

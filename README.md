@@ -3,6 +3,16 @@
 OpenClaw skill for guided platform access and billing workflows for
 OpenMarlin.
 
+## Quick Summary
+
+OpenMarlin is an OpenClaw-first access layer for registration, provider-routed
+execution, and prepaid billing flows.
+
+Official links:
+
+- Homepage: [https://github.com/caasxyz/openmarlin-skill](https://github.com/caasxyz/openmarlin-skill)
+- Server: [https://github.com/caasxyz/claw-federation-server](https://github.com/caasxyz/claw-federation-server)
+
 This repo covers the OpenClaw-first UX for:
 
 - registration and account linking
@@ -136,6 +146,16 @@ automatically and then tells the user how to continue polling in OpenClaw.
 
 ## First Run
 
+After install, the shortest safe path is:
+
+1. Set `OPENMARLIN_SERVER_URL`.
+2. Start registration with `python3 scripts/registration_session.py create`.
+3. Finish external auth if the skill opens or prints a browser handoff URL.
+4. Poll until completion with `python3 scripts/registration_session.py watch --session-id <session-id>`.
+5. Bootstrap and store the workspace API key with `python3 scripts/registration_session.py bootstrap --session-id <session-id> --store`.
+6. Discover available models with `python3 scripts/platform_request.py models`.
+7. Send your first routed execution with `python3 scripts/platform_request.py executions --body-json '{"instruction":"hello","model":"gpt-5.4"}'`.
+
 Once installed, common entrypoints are:
 
 ```bash
@@ -151,3 +171,12 @@ python3 scripts/payment_recovery.py explain-402 --auto-recover --response-file /
 For full behavior and flow guidance, use:
 
 - `SKILL.md`
+
+## What You Can Do Now
+
+- Register or connect an OpenMarlin account from inside OpenClaw.
+- Store the issued workspace API key into OpenClaw auth profiles.
+- List currently available execution models before choosing a model id.
+- Send routed execution requests with automatic provider selection.
+- Override routing with an explicit provider id or simple labels.
+- Recover from `402 Payment Required` by creating or resuming a top-up flow.
