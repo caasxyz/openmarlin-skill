@@ -1,29 +1,6 @@
 ---
 name: openmarlin-registration
 description: "Guide platform registration, account linking, and server-routed provider selection for OpenMarlin in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, or send a native execution request with automatic routing, an explicit provider override, or simple routing hints. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
-metadata:
-  openclaw:
-    emoji: "🦞"
-    homepage: "https://github.com/caasxyz/openmarlin-skill"
-    skillKey: openmarlin-registration
-    requires:
-      bins:
-        - python3
-      env:
-        - OPENMARLIN_SERVER_URL
-      files:
-        - path: SKILL.md
-        - path: scripts/*.py
-    primaryEnv: OPENMARLIN_SERVER_URL
-    install:
-      - id: brew-python3
-        kind: brew
-        formula: python
-        bins:
-          - python3
-        label: "Install Python 3 (brew)"
-        os:
-          - darwin
 ---
 
 # OpenMarlin Registration
@@ -48,6 +25,13 @@ Official links:
 This skill is distributed as a directory, not as a standalone Markdown file.
 When installing from a raw URL or a git checkout, install the whole skill
 directory instead of copying only `SKILL.md`.
+
+Requirements and install hints:
+
+- `python3` must be available in `PATH`
+- `OPENMARLIN_SERVER_URL` must be configured before first use
+- if you install manually, copy both `SKILL.md` and `scripts/*.py`
+- if your environment supports installer hints, use your normal Python 3 install path for this workspace
 
 Required files:
 
