@@ -93,7 +93,7 @@ After registration completes, the next thing the user usually needs is one of:
 
 ## Trust And Secrets
 
-- Treat `OPENMARLIN_SERVER_URL` as the only trusted API origin for federation registration, key bootstrap, routing, balance, and top-up calls.
+- Treat `OPENMARLIN_SERVER_URL` as the only trusted API origin for OpenMarlin registration, key bootstrap, routing, balance, and top-up calls.
 - Treat browser handoff URLs as trusted only when they come directly from the server contract in `handoff.authorization_url`.
 - Do not reconstruct, guess, or rewrite WorkOS or web handoff URLs from device codes, callback state, copied text, or unrelated user input.
 - If the server does not return `handoff.authorization_url`, stop treating browser handoff as ready and explain that the deployment is missing the required server-side contract.
@@ -101,7 +101,7 @@ After registration completes, the next thing the user usually needs is one of:
 - Never ask the user to paste platform API keys into chat if the skill can store or load them through OpenClaw auth profiles.
 - Store issued platform API keys only in OpenClaw auth-profile storage, not in ordinary skill config, free-form notes, or browser URL parameters.
 - Treat `OPENMARLIN_PLATFORM_API_KEY` as a temporary operator override for local debugging, not the preferred long-term storage path.
-- Do not send platform API keys to browser handoff URLs, Stripe checkout URLs, or any origin other than the configured federation server.
+- Do not send platform API keys to browser handoff URLs, Stripe checkout URLs, or any origin other than the configured OpenMarlin server.
 - When reporting status back to the user, show where the key was stored or loaded from, but do not echo the raw secret unless the active command explicitly returns it.
 
 ## Server Contract
@@ -172,7 +172,7 @@ structured `402` payload:
 
 That 402 contract should drive recovery UX instead of generic error handling.
 
-For native OpenClaw execution federation, the caller-facing contract is:
+For native OpenClaw execution through OpenMarlin, the caller-facing contract is:
 
 - `POST /v1/executions`
 
