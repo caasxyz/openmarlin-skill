@@ -112,10 +112,6 @@ def parse_args() -> argparse.Namespace:
         "--body-file",
         help="Path to a JSON file containing the /v1/executions payload.",
     )
-    executions.add_argument(
-        "--model-provider",
-        help="Optional coarse model family routing hint for /v1/executions. Sent as model_provider alongside any exact model id.",
-    )
 
     invoke = subparsers.add_parser(
         "invoke",
@@ -146,6 +142,35 @@ def require_non_empty(value: str, message: str) -> str:
     if not normalized:
         raise SystemExit(message)
     return normalized
+
+
+def normalize_exact_execution_model(body: dict[str, Any]) -> None:
+    if "model_provider" in body or "modelProvider" in body:
+        raise SystemExit(
+            "Family-level execution routing is no longer supported. "
+            "Run `python3 scripts/platform_request.py models` and use an exact full model ref."
+        )
+
+    raw_model = body.get("model")
+    if not isinstance(raw_model, str):
+        raise SystemExit(
+            "Execution requests now require body.model to be an exact full model ref. "
+            "Run `python3 scripts/platform_request.py models` and copy one of the exact ids."
+        )
+
+    model = raw_model.strip()
+    if not model:
+        raise SystemExit(
+            "Execution requests now require a non-empty body.model exact full ref. "
+            "Run `python3 scripts/platform_request.py models` and copy one of the exact ids."
+        )
+    if "/" not in model:
+        raise SystemExit(
+            f"Execution model must be an exact full ref, got {model!r}. "
+            "Run `python3 scripts/platform_request.py models` and use the exact id as returned."
+        )
+
+    body["model"] = model
 
 
 def resolve_api_key(raw_api_key: str, profile_id: str, agent_id: str) -> tuple[str | None, str | None, str | None]:
@@ -378,14 +403,6 @@ def iter_discovered_models(payload: JsonValue) -> list[dict[str, Any]]:
     return []
 
 
-def iter_provider_families(payload: JsonValue) -> list[dict[str, Any]]:
-    if isinstance(payload, dict):
-        families = payload.get("provider_families")
-        if isinstance(families, list):
-            return [item for item in families if isinstance(item, dict)]
-    return []
-
-
 def format_labels(labels: Any) -> str | None:
     if isinstance(labels, dict) and labels:
         normalized = {str(key): value for key, value in labels.items()}
@@ -401,14 +418,10 @@ def format_string_list(values: Any) -> list[str]:
 
 def print_models_success(payload: JsonValue) -> None:
     models = iter_discovered_models(payload)
-    provider_families = iter_provider_families(payload)
-    if not models and not provider_families:
+    if not models:
         print("Command: models")
-        print("Response:")
-        if isinstance(payload, str):
-            print(payload)
-        else:
-            print(json.dumps(payload, indent=2, sort_keys=True))
+        print("Exact models: 0")
+        print("No exact execution models were returned. /v1/executions now requires an exact full model ref from /v1/models.")
         return
 
     print("Command: models")
@@ -440,21 +453,6 @@ def print_models_success(payload: JsonValue) -> None:
             print(f"- {model_id} via {provider_id} labels={labels}")
         else:
             print(f"- {model_id} via {provider_id}")
-
-    print(f"Family-only providers: {len(provider_families)}")
-    if provider_families:
-        print("Family-level discovery is supplemental metadata, not an exact routing model id.")
-    for entry in provider_families:
-        provider_id = entry.get("provider_id") or entry.get("provider") or "<unknown>"
-        families = format_string_list(entry.get("families"))
-        labels = format_labels(entry.get("labels"))
-        details: list[str] = []
-        if families:
-            details.append(f"families={json.dumps(families)}")
-        if labels:
-            details.append(f"labels={labels}")
-        suffix = f" {' '.join(details)}" if details else ""
-        print(f"- {provider_id}{suffix}")
 
 
 def print_success(command: str, provider: str | None, labels: dict[str, str] | None, payload: JsonValue) -> None:
@@ -496,13 +494,10 @@ def print_dry_run(args: argparse.Namespace, server_url: str, provider: str | Non
     }
     if args.command == "executions":
         body = load_json_object_from_option(args.body_json, args.body_file, source_name="body")
-        model_provider = args.model_provider.strip() if isinstance(args.model_provider, str) else ""
-        if model_provider:
-            body["model_provider"] = model_provider
+        normalize_exact_execution_model(body)
         payload["request_preview"] = {
             "kind": body.get("kind", "agent_run"),
             "model": body.get("model"),
-            "model_provider": body.get("model_provider") or body.get("modelProvider"),
             "stream": body.get("stream") is True,
             "has_instruction": isinstance(body.get("instruction"), str) and bool(body.get("instruction").strip()),
         }
@@ -532,7 +527,6 @@ def print_dry_run(args: argparse.Namespace, server_url: str, provider: str | Non
             preview = payload["request_preview"]
             print(f"Execution kind: {preview.get('kind', 'agent_run')}")
             print(f"Model: {preview.get('model', '<unknown>')}")
-            print(f"Model provider family: {preview.get('model_provider') or '<none>'}")
             print(f"Instruction present: {'yes' if preview.get('has_instruction') else 'no'}")
             print(f"Stream: {'yes' if preview.get('stream') else 'no'}")
         elif args.command == "models":
@@ -554,8 +548,7 @@ def main() -> int:
 
     if args.command == "executions":
         body = load_json_object_from_option(args.body_json, args.body_file, source_name="body")
-        if args.model_provider and args.model_provider.strip():
-            body["model_provider"] = args.model_provider.strip()
+        normalize_exact_execution_model(body)
         if provider:
             body["provider_id"] = provider
         if labels:

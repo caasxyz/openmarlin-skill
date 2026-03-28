@@ -499,33 +499,14 @@ When `/v1/models` returns an exact model id, prefer that full exact ref as-is,
 for example `openai-codex/gpt-5.4`, instead of shortening it to a bare id like
 `gpt-5.4`.
 
-Treat any reported provider families as discovery-only hints. They help explain
-which providers are present even when exact model ids are missing, but they are
-not a substitute for an exact model id when sending `/v1/executions`.
+Send `/v1/executions` only with an exact full model ref returned by
+`python3 scripts/platform_request.py models`.
 
 Send an authenticated `/v1/executions` request and let the server route it
 automatically:
 
 ```bash
 python3 scripts/platform_request.py executions \
-  --body-json '{"instruction":"say hello","model":"openai-codex/gpt-5.4"}'
-```
-
-Send a coarse family routing hint when discovery only exposes provider
-families and no exact model id yet:
-
-```bash
-python3 scripts/platform_request.py executions \
-  --model-provider gpt-5 \
-  --body-json '{"instruction":"say hello"}'
-```
-
-If you know both an exact model id and the coarse family, send both so the
-server can enforce both filters:
-
-```bash
-python3 scripts/platform_request.py executions \
-  --model-provider gpt-5 \
   --body-json '{"instruction":"say hello","model":"openai-codex/gpt-5.4"}'
 ```
 
