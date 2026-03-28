@@ -395,11 +395,6 @@ def iter_discovered_models(payload: JsonValue) -> list[dict[str, Any]]:
         data = payload.get("data")
         if isinstance(data, list):
             return [item for item in data if isinstance(item, dict)]
-        models = payload.get("models")
-        if isinstance(models, list):
-            return [item for item in models if isinstance(item, dict)]
-    if isinstance(payload, list):
-        return [item for item in payload if isinstance(item, dict)]
     return []
 
 
@@ -427,16 +422,18 @@ def print_models_success(payload: JsonValue) -> None:
     print("Command: models")
     print(f"Exact models: {len(models)}")
     for entry in models:
-        model_id = entry.get("model") or entry.get("id") or entry.get("model_id") or "<unknown>"
+        model_id = entry.get("id") if isinstance(entry.get("id"), str) and entry.get("id").strip() else "<unknown>"
         providers = entry.get("providers")
         if isinstance(providers, list) and providers:
             for provider_entry in providers:
                 if not isinstance(provider_entry, dict):
                     continue
-                provider_id = provider_entry.get("provider_id") or provider_entry.get("provider") or "<unknown>"
-                provider_models = format_string_list(
-                    provider_entry.get("model_providers") or provider_entry.get("models")
+                provider_id = (
+                    provider_entry.get("provider_id")
+                    if isinstance(provider_entry.get("provider_id"), str) and provider_entry.get("provider_id").strip()
+                    else "<unknown>"
                 )
+                provider_models = format_string_list(provider_entry.get("model_providers"))
                 labels = format_labels(provider_entry.get("labels"))
                 details: list[str] = []
                 if provider_models and provider_models != [model_id]:
@@ -446,13 +443,6 @@ def print_models_success(payload: JsonValue) -> None:
                 suffix = f" {' '.join(details)}" if details else ""
                 print(f"- {model_id} via {provider_id}{suffix}")
             continue
-
-        provider_id = entry.get("provider_id") or entry.get("provider") or "<unknown>"
-        labels = format_labels(entry.get("labels"))
-        if labels:
-            print(f"- {model_id} via {provider_id} labels={labels}")
-        else:
-            print(f"- {model_id} via {provider_id}")
 
 
 def print_success(command: str, provider: str | None, labels: dict[str, str] | None, payload: JsonValue) -> None:
