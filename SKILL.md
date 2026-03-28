@@ -91,6 +91,7 @@ After registration completes, the next thing the user usually needs is one of:
 - Treat browser use as a narrow identity step, not the main control plane.
 - For platform execution requests, prefer server-side automatic routing by default.
 - Use explicit provider selection as an override when the user really wants a specific node.
+- When using explicit `provider_id` for `/v1/executions`, first confirm from `python3 scripts/platform_request.py models` that the provider advertises the same exact model ref you are about to send.
 - Surface only simple routing hints such as `region=ap-sg` or `tier=premium`.
 - Do not invent hidden routing labels or pretend to bypass server validation.
 - When routing fails, explain the server-side reason in plain language.
@@ -502,6 +503,9 @@ for example `openai-codex/gpt-5.4`, instead of shortening it to a bare id like
 Send `/v1/executions` only with an exact full model ref returned by
 `python3 scripts/platform_request.py models`.
 
+If you are about to add `--provider`, first confirm that the same `models`
+output shows that provider under the exact model ref you plan to send.
+
 Send an authenticated `/v1/executions` request and let the server route it
 automatically:
 
@@ -522,6 +526,9 @@ python3 scripts/platform_request.py executions \
 
 Send an authenticated `/v1/executions` request with an explicit provider
 override:
+
+First use `python3 scripts/platform_request.py models` and verify that
+`node-a` appears under `openai-codex/gpt-5.4`, then send:
 
 ```bash
 python3 scripts/platform_request.py executions \

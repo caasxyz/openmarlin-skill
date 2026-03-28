@@ -157,6 +157,10 @@ After install, the shortest safe path is:
 6. Discover available models with `python3 scripts/platform_request.py models`.
 7. Send your first routed execution with `python3 scripts/platform_request.py executions --body-json '{"instruction":"hello","model":"openai-codex/gpt-5.4"}'`.
 
+If you plan to force a specific `provider_id`, first confirm that the same
+`python3 scripts/platform_request.py models` result shows that provider under
+the exact model you intend to send.
+
 Once installed, common entrypoints are:
 
 ```bash
@@ -179,6 +183,7 @@ For full behavior and flow guidance, use:
 - Register or connect an OpenMarlin account from inside OpenClaw.
 - Store the issued workspace API key into OpenClaw auth profiles.
 - List currently available execution models before choosing a model id, and prefer the full exact ref returned by `/v1/models`.
+- When forcing `provider_id`, pair it with an exact model ref from the same `/v1/models` result instead of guessing.
 - Send routed execution requests with automatic provider selection.
 - Override routing with an explicit provider id or simple labels.
 - Inspect recent prepaid usage and ledger activity from the server APIs.

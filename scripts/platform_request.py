@@ -63,7 +63,7 @@ def parse_args() -> argparse.Namespace:
     common.add_argument(
         "--provider",
         default=(default_provider or "").strip(),
-        help="Optional explicit provider override. Defaults to OPENMARLIN_DEFAULT_PROVIDER_ID, then OpenClaw skill config.",
+        help="Optional explicit provider override. Defaults to OPENMARLIN_DEFAULT_PROVIDER_ID, then OpenClaw skill config. For /v1/executions, first confirm this provider advertises the exact model in `python3 scripts/platform_request.py models`.",
     )
     common.add_argument(
         "--label",
