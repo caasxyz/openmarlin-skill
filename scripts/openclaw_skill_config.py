@@ -71,10 +71,14 @@ def get_skill_env(var_name: str) -> tuple[str | None, str | None]:
 
     entry, config_path = load_openclaw_skill_entry()
     if not entry:
+        if var_name == "OPENMARLIN_SERVER_URL":
+            return DEFAULT_SERVER_URL, "built-in-default"
         return None, None
 
     env_block = entry.get("env")
     if not isinstance(env_block, dict):
+        if var_name == "OPENMARLIN_SERVER_URL":
+            return DEFAULT_SERVER_URL, "built-in-default"
         return None, config_path
 
     value = env_block.get(var_name)

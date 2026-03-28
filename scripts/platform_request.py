@@ -112,6 +112,10 @@ def parse_args() -> argparse.Namespace:
         "--body-file",
         help="Path to a JSON file containing the /v1/executions payload.",
     )
+    executions.add_argument(
+        "--model-provider",
+        help="Optional coarse model family routing hint for /v1/executions. Sent as model_provider alongside any exact model id.",
+    )
 
     invoke = subparsers.add_parser(
         "invoke",
@@ -492,9 +496,13 @@ def print_dry_run(args: argparse.Namespace, server_url: str, provider: str | Non
     }
     if args.command == "executions":
         body = load_json_object_from_option(args.body_json, args.body_file, source_name="body")
+        model_provider = args.model_provider.strip() if isinstance(args.model_provider, str) else ""
+        if model_provider:
+            body["model_provider"] = model_provider
         payload["request_preview"] = {
             "kind": body.get("kind", "agent_run"),
             "model": body.get("model"),
+            "model_provider": body.get("model_provider") or body.get("modelProvider"),
             "stream": body.get("stream") is True,
             "has_instruction": isinstance(body.get("instruction"), str) and bool(body.get("instruction").strip()),
         }
@@ -524,6 +532,7 @@ def print_dry_run(args: argparse.Namespace, server_url: str, provider: str | Non
             preview = payload["request_preview"]
             print(f"Execution kind: {preview.get('kind', 'agent_run')}")
             print(f"Model: {preview.get('model', '<unknown>')}")
+            print(f"Model provider family: {preview.get('model_provider') or '<none>'}")
             print(f"Instruction present: {'yes' if preview.get('has_instruction') else 'no'}")
             print(f"Stream: {'yes' if preview.get('stream') else 'no'}")
         elif args.command == "models":
@@ -545,6 +554,8 @@ def main() -> int:
 
     if args.command == "executions":
         body = load_json_object_from_option(args.body_json, args.body_file, source_name="body")
+        if args.model_provider and args.model_provider.strip():
+            body["model_provider"] = args.model_provider.strip()
         if provider:
             body["provider_id"] = provider
         if labels:
