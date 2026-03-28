@@ -155,7 +155,7 @@ After install, the shortest safe path is:
 4. Poll until completion with `python3 scripts/registration_session.py watch --session-id <session-id>`.
 5. Bootstrap and store the workspace API key with `python3 scripts/registration_session.py bootstrap --session-id <session-id> --store`.
 6. Discover available models with `python3 scripts/platform_request.py models`.
-7. Send your first routed execution with `python3 scripts/platform_request.py executions --body-json '{"instruction":"hello","model":"gpt-5.4"}'`.
+7. Send your first routed execution with `python3 scripts/platform_request.py executions --body-json '{"instruction":"hello","model":"openai-codex/gpt-5.4"}'`.
 
 Once installed, common entrypoints are:
 
@@ -163,9 +163,9 @@ Once installed, common entrypoints are:
 python3 scripts/registration_session.py create
 python3 scripts/registration_session.py --server-url https://your-server.example.com create --dry-run
 python3 scripts/platform_request.py models
-python3 scripts/platform_request.py executions --body-json '{"instruction":"hello","model":"gpt-5.4"}'
+python3 scripts/platform_request.py executions --body-json '{"instruction":"hello","model":"openai-codex/gpt-5.4"}'
 python3 scripts/platform_request.py executions --model-provider gpt-5 --body-json '{"instruction":"hello"}'
-python3 scripts/platform_request.py executions --dry-run --server-url https://your-server.example.com --api-key claw_wsk_placeholder --body-json '{"instruction":"hello","model":"gpt-5.4"}'
+python3 scripts/platform_request.py executions --dry-run --server-url https://your-server.example.com --api-key claw_wsk_placeholder --body-json '{"instruction":"hello","model":"openai-codex/gpt-5.4"}'
 python3 scripts/billing.py activity
 python3 scripts/billing.py explain-402 --response-file /path/to/402.json
 python3 scripts/billing.py explain-402 --auto-recover --response-file /path/to/402.json
@@ -179,7 +179,7 @@ For full behavior and flow guidance, use:
 
 - Register or connect an OpenMarlin account from inside OpenClaw.
 - Store the issued workspace API key into OpenClaw auth profiles.
-- List currently available execution models before choosing a model id.
+- List currently available execution models before choosing a model id, and prefer the full exact ref returned by `/v1/models`.
 - Treat family-level provider discovery as supplemental metadata; exact routing still needs a concrete model id from the exact model list.
 - Use `--model-provider <family>` for coarse family routing only when exact model ids are unavailable; if both are known, send both the exact `model` and the coarse family hint.
 - Send routed execution requests with automatic provider selection.

@@ -495,6 +495,10 @@ List currently available execution models before choosing a model id:
 python3 scripts/platform_request.py models
 ```
 
+When `/v1/models` returns an exact model id, prefer that full exact ref as-is,
+for example `openai-codex/gpt-5.4`, instead of shortening it to a bare id like
+`gpt-5.4`.
+
 Treat any reported provider families as discovery-only hints. They help explain
 which providers are present even when exact model ids are missing, but they are
 not a substitute for an exact model id when sending `/v1/executions`.
@@ -504,7 +508,7 @@ automatically:
 
 ```bash
 python3 scripts/platform_request.py executions \
-  --body-json '{"instruction":"say hello","model":"gpt-5.4"}'
+  --body-json '{"instruction":"say hello","model":"openai-codex/gpt-5.4"}'
 ```
 
 Send a coarse family routing hint when discovery only exposes provider
@@ -522,7 +526,7 @@ server can enforce both filters:
 ```bash
 python3 scripts/platform_request.py executions \
   --model-provider gpt-5 \
-  --body-json '{"instruction":"say hello","model":"gpt-5.4"}'
+  --body-json '{"instruction":"say hello","model":"openai-codex/gpt-5.4"}'
 ```
 
 Dry-run a routed request without sending it:
@@ -532,7 +536,7 @@ python3 scripts/platform_request.py executions \
   --dry-run \
   --server-url https://your-server.example.com \
   --api-key claw_wsk_placeholder \
-  --body-json '{"instruction":"say hello","model":"gpt-5.4"}'
+  --body-json '{"instruction":"say hello","model":"openai-codex/gpt-5.4"}'
 ```
 
 Send an authenticated `/v1/executions` request with an explicit provider
@@ -541,7 +545,7 @@ override:
 ```bash
 python3 scripts/platform_request.py executions \
   --provider node-a \
-  --body-json '{"instruction":"say hello","model":"gpt-5.4"}'
+  --body-json '{"instruction":"say hello","model":"openai-codex/gpt-5.4"}'
 ```
 
 Send a request with simple routing hints and let the server narrow the route:
@@ -550,14 +554,14 @@ Send a request with simple routing hints and let the server narrow the route:
 python3 scripts/platform_request.py executions \
   --label region=ap-sg \
   --label tier=premium \
-  --body-json '{"instruction":"summarize this","model":"gpt-5.4"}'
+  --body-json '{"instruction":"summarize this","model":"openai-codex/gpt-5.4"}'
 ```
 
 Request streaming execution updates over SSE:
 
 ```bash
 python3 scripts/platform_request.py executions \
-  --body-json '{"instruction":"say hello","model":"gpt-5.4","stream":true}'
+  --body-json '{"instruction":"say hello","model":"openai-codex/gpt-5.4","stream":true}'
 ```
 
 Invoke a registered remote skill with automatic provider selection:
