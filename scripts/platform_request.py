@@ -363,6 +363,9 @@ def explain_error(code: int, payload: JsonValue, provider: str | None, labels: d
 
 def iter_discovered_models(payload: JsonValue) -> list[dict[str, Any]]:
     if isinstance(payload, dict):
+        data = payload.get("data")
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
         models = payload.get("models")
         if isinstance(models, list):
             return [item for item in models if isinstance(item, dict)]
@@ -371,9 +374,31 @@ def iter_discovered_models(payload: JsonValue) -> list[dict[str, Any]]:
     return []
 
 
+def iter_provider_families(payload: JsonValue) -> list[dict[str, Any]]:
+    if isinstance(payload, dict):
+        families = payload.get("provider_families")
+        if isinstance(families, list):
+            return [item for item in families if isinstance(item, dict)]
+    return []
+
+
+def format_labels(labels: Any) -> str | None:
+    if isinstance(labels, dict) and labels:
+        normalized = {str(key): value for key, value in labels.items()}
+        return json.dumps(normalized, sort_keys=True)
+    return None
+
+
+def format_string_list(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    return [item.strip() for item in values if isinstance(item, str) and item.strip()]
+
+
 def print_models_success(payload: JsonValue) -> None:
     models = iter_discovered_models(payload)
-    if not models:
+    provider_families = iter_provider_families(payload)
+    if not models and not provider_families:
         print("Command: models")
         print("Response:")
         if isinstance(payload, str):
@@ -383,15 +408,49 @@ def print_models_success(payload: JsonValue) -> None:
         return
 
     print("Command: models")
-    print(f"Available models: {len(models)}")
+    print(f"Exact models: {len(models)}")
     for entry in models:
         model_id = entry.get("model") or entry.get("id") or entry.get("model_id") or "<unknown>"
+        providers = entry.get("providers")
+        if isinstance(providers, list) and providers:
+            for provider_entry in providers:
+                if not isinstance(provider_entry, dict):
+                    continue
+                provider_id = provider_entry.get("provider_id") or provider_entry.get("provider") or "<unknown>"
+                provider_models = format_string_list(
+                    provider_entry.get("model_providers") or provider_entry.get("models")
+                )
+                labels = format_labels(provider_entry.get("labels"))
+                details: list[str] = []
+                if provider_models and provider_models != [model_id]:
+                    details.append(f"advertises={json.dumps(provider_models)}")
+                if labels:
+                    details.append(f"labels={labels}")
+                suffix = f" {' '.join(details)}" if details else ""
+                print(f"- {model_id} via {provider_id}{suffix}")
+            continue
+
         provider_id = entry.get("provider_id") or entry.get("provider") or "<unknown>"
-        labels = entry.get("labels")
-        if isinstance(labels, dict) and labels:
-            print(f"- {model_id} via {provider_id} labels={json.dumps(labels, sort_keys=True)}")
+        labels = format_labels(entry.get("labels"))
+        if labels:
+            print(f"- {model_id} via {provider_id} labels={labels}")
         else:
             print(f"- {model_id} via {provider_id}")
+
+    print(f"Family-only providers: {len(provider_families)}")
+    if provider_families:
+        print("Family-level discovery is supplemental metadata, not an exact routing model id.")
+    for entry in provider_families:
+        provider_id = entry.get("provider_id") or entry.get("provider") or "<unknown>"
+        families = format_string_list(entry.get("families"))
+        labels = format_labels(entry.get("labels"))
+        details: list[str] = []
+        if families:
+            details.append(f"families={json.dumps(families)}")
+        if labels:
+            details.append(f"labels={labels}")
+        suffix = f" {' '.join(details)}" if details else ""
+        print(f"- {provider_id}{suffix}")
 
 
 def print_success(command: str, provider: str | None, labels: dict[str, str] | None, payload: JsonValue) -> None:

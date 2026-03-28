@@ -495,6 +495,10 @@ List currently available execution models before choosing a model id:
 python3 scripts/platform_request.py models
 ```
 
+Treat any reported provider families as discovery-only hints. They help explain
+which providers are present even when exact model ids are missing, but they are
+not a substitute for an exact model id when sending `/v1/executions`.
+
 Send an authenticated `/v1/executions` request and let the server route it
 automatically:
 

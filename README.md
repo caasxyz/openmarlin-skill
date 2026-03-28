@@ -179,6 +179,7 @@ For full behavior and flow guidance, use:
 - Register or connect an OpenMarlin account from inside OpenClaw.
 - Store the issued workspace API key into OpenClaw auth profiles.
 - List currently available execution models before choosing a model id.
+- Treat family-level provider discovery as supplemental metadata; exact routing still needs a concrete model id from the exact model list.
 - Send routed execution requests with automatic provider selection.
 - Override routing with an explicit provider id or simple labels.
 - Inspect recent prepaid usage and ledger activity from the server APIs.
