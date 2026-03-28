@@ -48,10 +48,11 @@ Clone the repo anywhere and use the skill in place:
 ```bash
 git clone https://github.com/caasxyz/openmarlin-skill.git
 cd openmarlin-skill
-export OPENMARLIN_SERVER_URL="http://127.0.0.1:3000"
 ```
 
-This is the simplest path for development or local testing.
+By default the skill targets `https://api.openmarlin.ai`. Override
+`OPENMARLIN_SERVER_URL` only when you want a different deployment such as a
+local dev server, and use the bare origin without `/v1`.
 
 ### Option 2: Install as a local OpenClaw skill
 
@@ -89,7 +90,7 @@ The helper scripts remain available relative to that installed skill directory:
 ## Requirements
 
 - `python3`
-- `OPENMARLIN_SERVER_URL`
+- `OPENMARLIN_SERVER_URL` defaults to `https://api.openmarlin.ai`
 
 Optional but commonly useful:
 
@@ -138,7 +139,7 @@ automatically and then tells the user how to continue polling in OpenClaw.
 
 ## Trust And Secret Handling
 
-- Treat `OPENMARLIN_SERVER_URL` as the trusted API origin for registration, bootstrap, routing, balance, and top-up calls.
+- Treat `OPENMARLIN_SERVER_URL` as the trusted API origin for registration, bootstrap, routing, balance, and top-up calls. Use the bare origin, not an origin with `/v1`.
 - Treat browser handoff URLs as trusted only when they come from the server's `handoff.authorization_url`.
 - Do not reconstruct WorkOS or browser handoff URLs locally from device codes or callback state.
 - Store issued platform API keys in OpenClaw auth-profile storage, not in ordinary skill config.
@@ -148,7 +149,7 @@ automatically and then tells the user how to continue polling in OpenClaw.
 
 After install, the shortest safe path is:
 
-1. Set `OPENMARLIN_SERVER_URL`.
+1. Confirm `OPENMARLIN_SERVER_URL` if you need to override the default `https://api.openmarlin.ai`.
 2. Start registration with `python3 scripts/registration_session.py create`.
 3. Finish external auth if the skill opens or prints a browser handoff URL.
 4. Poll until completion with `python3 scripts/registration_session.py watch --session-id <session-id>`.

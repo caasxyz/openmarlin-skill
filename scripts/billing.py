@@ -13,6 +13,7 @@ import urllib.request
 from typing import Any
 
 from openclaw_skill_config import (
+    DEFAULT_SERVER_URL,
     build_server_connection_error,
     get_skill_env,
     probe_server_openapi,
@@ -39,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     common.add_argument(
         "--server-url",
         default=(default_server_url or "").strip(),
-        help="Base URL for the OpenMarlin server. Defaults to OPENMARLIN_SERVER_URL, then OpenClaw skill config.",
+        help=f"Base URL for the OpenMarlin server. Defaults to OPENMARLIN_SERVER_URL, then OpenClaw skill config, then {DEFAULT_SERVER_URL}. Do not include /v1.",
     )
     common.add_argument(
         "--api-key",

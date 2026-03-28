@@ -29,7 +29,8 @@ directory instead of copying only `SKILL.md`.
 Requirements and install hints:
 
 - `python3` must be available in `PATH`
-- `OPENMARLIN_SERVER_URL` must be configured before first use
+- `OPENMARLIN_SERVER_URL` defaults to `https://api.openmarlin.ai`
+- use the bare API origin for `OPENMARLIN_SERVER_URL`, not a value ending in `/v1`
 - if you install manually, copy both `SKILL.md` and `scripts/*.py`
 - if your environment supports installer hints, use your normal Python 3 install path for this workspace
 
@@ -99,7 +100,7 @@ After registration completes, the next thing the user usually needs is one of:
 
 ## Trust And Secrets
 
-- Treat `OPENMARLIN_SERVER_URL` as the only trusted API origin for OpenMarlin registration, key bootstrap, routing, balance, and top-up calls.
+- Treat `OPENMARLIN_SERVER_URL` as the only trusted API origin for OpenMarlin registration, key bootstrap, routing, balance, and top-up calls, and keep it as the bare origin without `/v1`.
 - Treat browser handoff URLs as trusted only when they come directly from the server contract in `handoff.authorization_url`.
 - Do not reconstruct, guess, or rewrite WorkOS or web handoff URLs from device codes, callback state, copied text, or unrelated user input.
 - If the server does not return `handoff.authorization_url`, stop treating browser handoff as ready and explain that the deployment is missing the required server-side contract.

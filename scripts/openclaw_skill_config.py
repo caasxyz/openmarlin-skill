@@ -13,6 +13,7 @@ import urllib.request
 SKILL_KEY = "openmarlin-registration"
 SKILL_KEY_ALIASES = [SKILL_KEY]
 PRIMARY_CONFIG_PATH = Path.home() / ".openclaw" / "openclaw.json"
+DEFAULT_SERVER_URL = "https://api.openmarlin.ai"
 
 
 def _candidate_config_paths() -> list[Path]:
@@ -80,6 +81,9 @@ def get_skill_env(var_name: str) -> tuple[str | None, str | None]:
     if isinstance(value, str) and value.strip():
         return value.strip(), f"openclaw-config:{config_path}"
 
+    if var_name == "OPENMARLIN_SERVER_URL":
+        return DEFAULT_SERVER_URL, "built-in-default"
+
     return None, config_path
 
 
@@ -100,13 +104,14 @@ def build_server_url_setup_message(*, resolved_value: str | None = None, reason:
         [
             headline,
             "",
-            "Set OPENMARLIN_SERVER_URL to your OpenMarlin server base URL.",
+            f'OPENMARLIN_SERVER_URL defaults to "{DEFAULT_SERVER_URL}".',
+            "Use the bare API origin. Do not include /v1 because the helper scripts add endpoint paths themselves.",
             "",
             "One-off shell setup:",
-            '  export OPENMARLIN_SERVER_URL="https://your-server.example.com"',
+            f'  export OPENMARLIN_SERVER_URL="{DEFAULT_SERVER_URL}"',
             "",
             f"Persisted OpenClaw config: {preferred_openclaw_config_path()}",
-            f'  skills.entries["{SKILL_KEY}"].env.OPENMARLIN_SERVER_URL = "https://your-server.example.com"',
+            f'  skills.entries["{SKILL_KEY}"].env.OPENMARLIN_SERVER_URL = "{DEFAULT_SERVER_URL}"',
             "",
             f"If available in your OpenClaw build, prefer `openclaw skills update-config {SKILL_KEY}` or the skill settings UI.",
         ]
