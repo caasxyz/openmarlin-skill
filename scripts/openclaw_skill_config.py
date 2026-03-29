@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 
 
-SKILL_KEY = "openmarlin-registration"
+SKILL_KEY = "openmarlin"
 SKILL_KEY_ALIASES = [SKILL_KEY]
 PRIMARY_CONFIG_PATH = Path.home() / ".openclaw" / "openclaw.json"
 DEFAULT_SERVER_URL = "https://api.openmarlin.ai"

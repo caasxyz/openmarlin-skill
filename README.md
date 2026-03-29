@@ -107,7 +107,7 @@ resolve them in this order:
 The persisted OpenClaw config path is:
 
 ```text
-skills.entries["openmarlin-registration"].env
+skills.entries["openmarlin"].env
 ```
 
 So OpenClaw can remember values such as:
@@ -116,7 +116,7 @@ So OpenClaw can remember values such as:
 {
   "skills": {
     "entries": {
-      "openmarlin-registration": {
+      "openmarlin": {
         "env": {
           "OPENMARLIN_SERVER_URL": "http://127.0.0.1:3000",
           "OPENMARLIN_DEFAULT_PROVIDER_ID": "node-a",

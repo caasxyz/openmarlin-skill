@@ -1,12 +1,16 @@
 ---
-name: openmarlin-registration
-description: "Guide platform registration, account linking, and server-routed provider selection for OpenMarlin in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, use OpenMarlin to answer a question or perform a task, or send a native execution request with automatic routing, an explicit provider override, or simple routing hints. Trigger on natural requests like 'use openmarlin to ...', 'ask openmarlin ...', '用 openmarlin ...', or '用 openmarlin 查一下 ...'. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
+name: openmarlin
+description: "Use OpenMarlin from OpenClaw for registration, account linking, exact-model execution requests, remote skill invocation, and billing recovery. Use when: a user wants to register or sign in, use OpenMarlin to answer a question or perform a task, or send a native execution request with automatic routing, an explicit provider override, or simple routing hints. Trigger on natural requests like 'use openmarlin to ...', 'ask openmarlin ...', '用 openmarlin ...', or '用 openmarlin 查一下 ...'. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
 ---
 
-# OpenMarlin Registration
+# OpenMarlin
 
-Use this skill when a user wants to create, connect, or resume an
-OpenMarlin platform account from inside OpenClaw.
+Use this skill when a user wants to use OpenMarlin from inside OpenClaw,
+whether that means first-time registration or an already-configured execution
+or invoke flow.
+
+For new users, the normal first step is still registration and API key
+bootstrap before trying the first execution request.
 
 Natural-language triggers that should activate this skill include:
 
@@ -283,14 +287,10 @@ required and default values from:
 
 1. process env
 2. `~/.openclaw/openclaw.json` under
-   `skills.entries["openmarlin-registration"].env`
+   `skills.entries["openmarlin"].env`
 
 That means the user does not need to hand-edit config files as long as
 OpenClaw writes the skill config on their behalf.
-
-The skill metadata also advertises the supported OpenClaw installer hint for
-`python3` and marks `OPENMARLIN_SERVER_URL` as the primary required env.
-More detailed env onboarding still lives in this Setup section.
 
 Optional direct API key override:
 
