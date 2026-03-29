@@ -316,86 +316,19 @@ If the server does not return `handoff.authorization_url`, keep the user in
 OpenClaw, surface the device code or callback state, and explain that the
 deployment is missing the required server-side WorkOS handoff URL contract.
 
-## Definition Of Done
-
-Registration or account-link is done only when all of these are true:
-
-- the registration session reached `completed`
-- the user has the linked account and workspace context
-- the user has either the next bootstrap command or the issued-key result, depending on where the flow stopped
-
-At handoff, tell the user:
-
-- whether this was a new account or a linked existing account
-- the `account_id` and workspace identity the server returned
-- whether the next step is API key bootstrap or whether bootstrap already happened
-
-Platform API key bootstrap is done only when all of these are true:
-
-- the server issued the initial platform API key successfully
-- the skill reported where the key came from and where it was stored
-- if `--store` was used, the key landed in OpenClaw auth-profile storage and later requests can load it without asking the user to paste it again
-
-At handoff, tell the user:
-
-- whether the key was only issued or also stored
-- the storage location or source label, not the raw secret by default
-- the next concrete command they can run with the stored credential
-
-Structured `402` recovery is done only when all of these are true:
-
-- the user can see the shortfall in plain language
-- the user has an actionable next step inside OpenClaw
-- if a top-up session was created, the checkout URL and session state are preserved for resume or watch
-
-At handoff, tell the user:
-
-- the current balance, required balance, and shortfall if the server provided them
-- whether a top-up session was created automatically or still needs to be created
-- that Stripe checkout is the only required external step
-
-Balance recovery after payment is done only when all of these are true:
-
-- the top-up session reached `credit_applied`
-- the resulting `credited_ledger_entry_id` is surfaced when available
-- the skill refreshed or reported the best available post-payment balance view
-
-At handoff, tell the user:
-
-- whether the payment is still pending, failed, or credited
-- the authoritative balance if it was refreshed from the server, otherwise that the shown balance is fallback context
-- the next safe action, such as retrying the original request
-
 ## Playbooks
 
-For new registration:
-
-- start with `python3 scripts/registration_session.py create`
-- prefer the default `device` flow unless the deployment explicitly requires `workos_callback`
-- if the server returns `handoff.authorization_url`, let OpenClaw open it and keep the user anchored in OpenClaw for the rest of the flow
-- after creation, always surface the session ID, any device code, and the exact `watch` command to resume
-- do not stop at browser handoff; continue with `watch`, then `bootstrap`, and finally tell the user where the key was stored or how to use the issued result
-
-For reconnect or resume:
-
-- if the user already has a registration session ID, start with `status` or `watch` instead of creating a new session
-- if the session is still `pending_external_auth`, restate the handoff URL if present, otherwise restate the device code or callback state and explain what is missing
-- if the session is `completed` but bootstrap has not happened yet, go straight to `issue-api-key` or `bootstrap`
-- if the session is `expired`, explain that it cannot be resumed and start a fresh registration flow
-
-For structured `402` recovery:
-
-- treat the `402 insufficient_balance` payload as a workflow input, not just an error to summarize
-- first explain the current balance, required balance, and shortfall in plain language when those fields are present
-- then choose whether to stop at explanation, create the top-up session explicitly, or use `--auto-recover`
-- when a top-up session exists, always surface the checkout URL, session ID, and the exact `status` or `watch` command to resume after payment
-
-For top-up follow-through:
-
-- after the user completes Stripe checkout, use `watch` or `status` on the top-up session rather than assuming payment settled
-- if the session reaches `credit_applied`, surface `credited_ledger_entry_id` when available and refresh the authoritative balance view
-- if the session is still pending or failed, tell the user that plainly and give the next safe step instead of implying the workspace is ready
-- once balance is restored, point the user back to the original request they were trying to run
+- For first-time setup, start with `registration_session.py create`, prefer the
+  default `device` flow, then continue through `watch` and `bootstrap --store`
+  instead of stopping at browser handoff.
+- If the user already has a registration session ID, resume with `status` or
+  `watch` rather than creating a fresh session. If it is `expired`, start over.
+- For structured `402` recovery, treat the payload as workflow input: explain
+  balance and shortfall, create or resume the top-up session, and keep the
+  checkout URL plus `status` / `watch` command visible.
+- After Stripe checkout, use top-up `status` or `watch` until the session is
+  `credit_applied`, then refresh the authoritative balance and point the user
+  back to the original request.
 
 ## Commands
 
@@ -601,57 +534,6 @@ python3 scripts/platform_request.py invoke \
   --provider node-a \
   --input-json '{"text":"hello"}'
 ```
-
-## Recommended Playbook
-
-### New Registration
-
-1. Confirm the user wants to register or connect their platform account.
-2. Start with `device` flow unless the deployment explicitly says to use
-   `workos_callback`.
-3. Create the session with
-   `python3 scripts/registration_session.py create`.
-4. Present only the minimum external-auth instructions:
-   - if an authorization URL is available, auto-open it and also show it in output
-   - if a device code is present, print it clearly alongside the browser step
-   - otherwise show the device code and explain the platform operator must
-     provide the verification URL
-5. Continue polling with `watch` and keep the conversation in OpenClaw.
-6. On completion, issue and store the first workspace API key with
-   `python3 scripts/registration_session.py bootstrap --session-id <session-id> --store`
-   or `issue-api-key --store` if the session is already completed.
-7. Summarize the linked account, workspace context, and that a platform API key
-   was bootstrapped and stored for OpenClaw reuse.
-
-### Connect Existing Account
-
-Use the same flow as registration. The server links by
-`provider + provider_subject`, so a returning WorkOS identity should resolve to
-the same `account_id` and workspace rather than creating a duplicate account.
-
-### Resume A Pending Flow
-
-If the user already has a `registration_session_id`, do not create a new one
-first. Resume with:
-
-```bash
-python3 scripts/registration_session.py watch --session-id <session-id>
-```
-
-If the session is expired, start a fresh session and explain that the prior
-handoff timed out.
-
-## Completion Handling
-
-When a session reaches `completed`:
-
-- confirm whether this was a new account or an existing linked account
-- summarize the workspace `display_name` and `slug`
-- preserve the `account_id` and `workspace_id` for the bootstrap step
-- if no key has been issued yet, call the API key bootstrap endpoint with the
-  original handoff proof from the session
-- treat the returned `secret` as sensitive and do not paste it back into
-  version-controlled files
 
 ## Credential Handling
 
