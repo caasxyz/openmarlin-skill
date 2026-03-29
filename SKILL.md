@@ -17,6 +17,26 @@ Natural-language triggers that should activate this skill include:
 - "用 openmarlin 执行这个任务"
 - "用 openmarlin 调一下这个远端 skill"
 
+## Activation And Routing
+
+When a user explicitly asks to use OpenMarlin, activate this skill first and
+only then decide which API path fits the request.
+
+Decision rules:
+
+- Requests like "use openmarlin to answer this", "ask openmarlin ...", or
+  "用 openmarlin 查一下 ..." should first be treated as OpenMarlin execution
+  intent, not as generic chat.
+- If the user is asking OpenMarlin to perform a normal task such as answering a
+  question, searching, summarizing, extracting, or translating, prefer the
+  execution path.
+- If the user explicitly asks to call a named remote skill, prefer `/invoke`.
+- If the user explicitly provides an execution-style payload, an exact model
+  ref, or asks for a native execution request, prefer `/v1/executions`.
+- Do not reject activation just because the user did not supply `provider_id`,
+  labels, or an exact model ref in the first sentence. Activate the skill,
+  then guide the missing execution details.
+
 ## Quick Summary
 
 OpenMarlin lets OpenClaw users register an account, bootstrap a workspace API
