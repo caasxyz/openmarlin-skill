@@ -21,25 +21,31 @@ Natural-language triggers that should activate this skill include:
 - "用 openmarlin 执行这个任务"
 - "用 openmarlin 调一下这个远端 skill"
 
-## Activation And Routing
+## How To Route Requests
 
 When a user explicitly asks to use OpenMarlin, activate this skill first and
-only then decide which API path fits the request.
-
-Decision rules:
+then route the request:
 
 - Requests like "use openmarlin to answer this", "ask openmarlin ...", or
-  "用 openmarlin 查一下 ..." should first be treated as OpenMarlin execution
-  intent, not as generic chat.
-- If the user is asking OpenMarlin to perform a normal task such as answering a
-  question, searching, summarizing, extracting, or translating, prefer the
-  execution path.
+  "用 openmarlin 查一下 ..." should be treated as OpenMarlin execution intent,
+  not generic chat.
+- For normal tasks such as answering, searching, summarizing, extracting, or
+  translating, prefer the execution path.
 - If the user explicitly asks to call a named remote skill, prefer `/invoke`.
-- If the user explicitly provides an execution-style payload, an exact model
-  ref, or asks for a native execution request, prefer `/v1/executions`.
+- If the user explicitly provides an execution payload, an exact model ref, or
+  asks for a native execution request, prefer `/v1/executions`.
 - Do not reject activation just because the user did not supply `provider_id`,
   labels, or an exact model ref in the first sentence. Activate the skill,
   then guide the missing execution details.
+- For platform execution requests, prefer server-side automatic routing by
+  default.
+- Use explicit provider selection only when the user really wants a specific
+  node.
+- When using explicit `provider_id` for `/v1/executions`, first confirm from
+  `python3 scripts/platform_request.py models` that the provider advertises the
+  same exact model ref you are about to send.
+- Surface only simple routing hints such as `region=ap-sg` or `tier=premium`.
+- Do not invent hidden routing labels or pretend to bypass server validation.
 
 ## Quick Summary
 
@@ -122,15 +128,13 @@ After registration completes, the next thing the user usually needs is one of:
 - After handoff begins, keep polling or resuming in OpenClaw until the session
   becomes `completed` or `expired`.
 - Treat browser use as a narrow identity step, not the main control plane.
-- For platform execution requests, prefer server-side automatic routing by default.
-- Use explicit provider selection as an override when the user really wants a specific node.
-- When using explicit `provider_id` for `/v1/executions`, first confirm from `python3 scripts/platform_request.py models` that the provider advertises the same exact model ref you are about to send.
-- Surface only simple routing hints such as `region=ap-sg` or `tier=premium`.
-- Do not invent hidden routing labels or pretend to bypass server validation.
 - When routing fails, explain the server-side reason in plain language.
-- Treat structured `402 Payment Required` as a guided recovery state, not a generic transport failure.
+- Treat structured `402 Payment Required` as a guided recovery state, not a
+  generic transport failure.
 - Keep 402 recovery inside OpenClaw until the required Stripe checkout step.
-- Keep billing state honest: prefer server-provided authoritative balance reads, keep 402 snapshots and top-up session state as supporting context, and clearly label any local fallback as last-known or estimated.
+- Keep billing state honest: prefer server-provided authoritative balance
+  reads, keep 402 snapshots and top-up session state as supporting context, and
+  clearly label any local fallback as last-known or estimated.
 
 ## Trust And Secrets
 
@@ -661,32 +665,6 @@ The returned `secret` is the steady-state platform credential for OpenClaw.
 - do not write the key into ordinary `openclaw.json` fields
 - if you only need to hand it off manually, use process env or operator-managed
   secret storage rather than chat history when possible
-
-## Provider Routing UX
-
-The platform routing model is server-routed by default.
-
-Preferred user-facing controls:
-
-- no provider override when the user just wants the server to choose
-- explicit `provider_id` when the user knows the target node
-- optional simple labels expressed as `key=value`
-- env-based defaults when the same provider override or routing hint should persist
-  across repeated requests
-
-Good examples:
-
-- "just send this normally"
-- "send this to provider `node-a`"
-- "use `region=ap-sg`"
-- "use `node-a` in `region=ap-sg`"
-- "default to provider `node-b` for this workspace session"
-
-Avoid exposing low-level policy internals. Keep the UX to:
-
-- provider choice
-- a small number of understandable labels
-- clear explanations when the server rejects the route
 
 ## Routing Failure Guidance
 
