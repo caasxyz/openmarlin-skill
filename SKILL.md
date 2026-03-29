@@ -41,9 +41,9 @@ then route the request:
   default.
 - Use explicit provider selection only when the user really wants a specific
   node.
-- When using explicit `provider_id` for `/v1/executions`, first confirm from
-  `python3 scripts/platform_request.py models` that the provider advertises the
-  same exact model ref you are about to send.
+- When using explicit `provider_id` together with an exact `model` for
+  `/v1/executions`, first confirm from `python3 scripts/platform_request.py models`
+  that the provider advertises that same exact model ref.
 - Surface only simple routing hints such as `region=ap-sg` or `tier=premium`.
 - Do not invent hidden routing labels or pretend to bypass server validation.
 
@@ -462,18 +462,24 @@ List currently available execution models before choosing a model id:
 python3 scripts/platform_request.py models
 ```
 
-When `/v1/models` returns an exact model id, prefer that full exact ref as-is,
-for example `openai-codex/gpt-5.4`, instead of shortening it to a bare id like
-`gpt-5.4`.
+If you omit `model`, `/v1/executions` lets the server choose both model and
+provider automatically. If you do pass `model`, use the exact full ref returned
+by `python3 scripts/platform_request.py models`, for example
+`openai-codex/gpt-5.4`, rather than a bare id like `gpt-5.4`.
 
-Send `/v1/executions` only with an exact full model ref returned by
-`python3 scripts/platform_request.py models`.
+If you pass both `--provider` and an exact `model`, first confirm that the same
+`models` output shows that provider under that exact model ref.
 
-If you are about to add `--provider`, first confirm that the same `models`
-output shows that provider under the exact model ref you plan to send.
+Send an authenticated `/v1/executions` request and let the server choose model
+and provider automatically:
 
-Send an authenticated `/v1/executions` request and let the server route it
-automatically:
+```bash
+python3 scripts/platform_request.py executions \
+  --body-json '{"instruction":"say hello"}'
+```
+
+Send an authenticated `/v1/executions` request with an exact model but
+automatic provider routing:
 
 ```bash
 python3 scripts/platform_request.py executions \
@@ -487,11 +493,20 @@ python3 scripts/platform_request.py executions \
   --dry-run \
   --server-url https://your-server.example.com \
   --api-key claw_wsk_placeholder \
-  --body-json '{"instruction":"say hello","model":"openai-codex/gpt-5.4"}'
+  --body-json '{"instruction":"say hello"}'
 ```
 
 Send an authenticated `/v1/executions` request with an explicit provider
 override:
+
+```bash
+python3 scripts/platform_request.py executions \
+  --provider node-a \
+  --body-json '{"instruction":"say hello"}'
+```
+
+Send an authenticated `/v1/executions` request with both an explicit provider
+and an exact model:
 
 First use `python3 scripts/platform_request.py models` and verify that
 `node-a` appears under `openai-codex/gpt-5.4`, then send:
@@ -508,14 +523,14 @@ Send a request with simple routing hints and let the server narrow the route:
 python3 scripts/platform_request.py executions \
   --label region=ap-sg \
   --label tier=premium \
-  --body-json '{"instruction":"summarize this","model":"openai-codex/gpt-5.4"}'
+  --body-json '{"instruction":"summarize this"}'
 ```
 
 Request streaming execution updates over SSE:
 
 ```bash
 python3 scripts/platform_request.py executions \
-  --body-json '{"instruction":"say hello","model":"openai-codex/gpt-5.4","stream":true}'
+  --body-json '{"instruction":"say hello","stream":true}'
 ```
 
 Invoke a registered remote skill with automatic provider selection:

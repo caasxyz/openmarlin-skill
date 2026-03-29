@@ -144,29 +144,26 @@ def require_non_empty(value: str, message: str) -> str:
     return normalized
 
 
-def normalize_exact_execution_model(body: dict[str, Any]) -> None:
+def normalize_execution_request(body: dict[str, Any]) -> None:
     if "model_provider" in body or "modelProvider" in body:
         raise SystemExit(
-            "Family-level execution routing is no longer supported. "
-            "Run `python3 scripts/platform_request.py models` and use an exact full model ref."
+            "Family-level execution routing is not supported in this skill. "
+            "Use no model for server-side automatic selection, or pass an exact full model ref in body.model."
         )
 
     raw_model = body.get("model")
+    if raw_model is None:
+        return
     if not isinstance(raw_model, str):
-        raise SystemExit(
-            "Execution requests now require body.model to be an exact full model ref. "
-            "Run `python3 scripts/platform_request.py models` and copy one of the exact ids."
-        )
+        raise SystemExit("If body.model is provided, it must be a string exact full model ref.")
 
     model = raw_model.strip()
     if not model:
-        raise SystemExit(
-            "Execution requests now require a non-empty body.model exact full ref. "
-            "Run `python3 scripts/platform_request.py models` and copy one of the exact ids."
-        )
+        body.pop("model", None)
+        return
     if "/" not in model:
         raise SystemExit(
-            f"Execution model must be an exact full ref, got {model!r}. "
+            f"If body.model is provided, it must be an exact full ref, got {model!r}. "
             "Run `python3 scripts/platform_request.py models` and use the exact id as returned."
         )
 
@@ -416,7 +413,7 @@ def print_models_success(payload: JsonValue) -> None:
     if not models:
         print("Command: models")
         print("Exact models: 0")
-        print("No exact execution models were returned. /v1/executions now requires an exact full model ref from /v1/models.")
+        print("No exact models were returned. /v1/executions can still omit body.model and let the server choose automatically.")
         return
 
     print("Command: models")
@@ -484,7 +481,7 @@ def print_dry_run(args: argparse.Namespace, server_url: str, provider: str | Non
     }
     if args.command == "executions":
         body = load_json_object_from_option(args.body_json, args.body_file, source_name="body")
-        normalize_exact_execution_model(body)
+        normalize_execution_request(body)
         payload["request_preview"] = {
             "kind": body.get("kind", "agent_run"),
             "model": body.get("model"),
@@ -516,7 +513,7 @@ def print_dry_run(args: argparse.Namespace, server_url: str, provider: str | Non
         if args.command == "executions":
             preview = payload["request_preview"]
             print(f"Execution kind: {preview.get('kind', 'agent_run')}")
-            print(f"Model: {preview.get('model', '<unknown>')}")
+            print(f"Model: {preview.get('model') or '<server auto-select>'}")
             print(f"Instruction present: {'yes' if preview.get('has_instruction') else 'no'}")
             print(f"Stream: {'yes' if preview.get('stream') else 'no'}")
         elif args.command == "models":
@@ -538,7 +535,7 @@ def main() -> int:
 
     if args.command == "executions":
         body = load_json_object_from_option(args.body_json, args.body_file, source_name="body")
-        normalize_exact_execution_model(body)
+        normalize_execution_request(body)
         if provider:
             body["provider_id"] = provider
         if labels:

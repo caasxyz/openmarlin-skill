@@ -154,12 +154,12 @@ After install, the shortest safe path is:
 3. Finish external auth if the skill opens or prints a browser handoff URL.
 4. Poll until completion with `python3 scripts/registration_session.py watch --session-id <session-id>`.
 5. Bootstrap and store the workspace API key with `python3 scripts/registration_session.py bootstrap --session-id <session-id> --store`.
-6. Discover available models with `python3 scripts/platform_request.py models`.
-7. Send your first routed execution with `python3 scripts/platform_request.py executions --body-json '{"instruction":"hello","model":"openai-codex/gpt-5.4"}'`.
+6. Optionally discover available exact models with `python3 scripts/platform_request.py models`.
+7. Send your first routed execution with `python3 scripts/platform_request.py executions --body-json '{"instruction":"hello"}'`.
 
-If you plan to force a specific `provider_id`, first confirm that the same
-`python3 scripts/platform_request.py models` result shows that provider under
-the exact model you intend to send.
+If you plan to force a specific `provider_id` and also pass an exact `model`,
+first confirm that the same `python3 scripts/platform_request.py models` result
+shows that provider under that exact model.
 
 Once installed, common entrypoints are:
 
@@ -167,8 +167,10 @@ Once installed, common entrypoints are:
 python3 scripts/registration_session.py create
 python3 scripts/registration_session.py --server-url https://your-server.example.com create --dry-run
 python3 scripts/platform_request.py models
+python3 scripts/platform_request.py executions --body-json '{"instruction":"hello"}'
+python3 scripts/platform_request.py executions --provider node-a --body-json '{"instruction":"hello"}'
 python3 scripts/platform_request.py executions --body-json '{"instruction":"hello","model":"openai-codex/gpt-5.4"}'
-python3 scripts/platform_request.py executions --dry-run --server-url https://your-server.example.com --api-key claw_wsk_placeholder --body-json '{"instruction":"hello","model":"openai-codex/gpt-5.4"}'
+python3 scripts/platform_request.py executions --dry-run --server-url https://your-server.example.com --api-key claw_wsk_placeholder --body-json '{"instruction":"hello"}'
 python3 scripts/billing.py activity
 python3 scripts/billing.py explain-402 --response-file /path/to/402.json
 python3 scripts/billing.py explain-402 --auto-recover --response-file /path/to/402.json
@@ -182,9 +184,9 @@ For full behavior and flow guidance, use:
 
 - Register or connect an OpenMarlin account from inside OpenClaw.
 - Store the issued workspace API key into OpenClaw auth profiles.
-- List currently available execution models before choosing a model id, and prefer the full exact ref returned by `/v1/models`.
-- When forcing `provider_id`, pair it with an exact model ref from the same `/v1/models` result instead of guessing.
-- Send routed execution requests with automatic provider selection.
+- Send routed execution requests with automatic provider and model selection.
+- When you do pass `model`, use the full exact ref returned by `/v1/models`.
+- When forcing both `provider_id` and `model`, pair them from the same `/v1/models` result instead of guessing.
 - Override routing with an explicit provider id or simple labels.
 - Inspect recent prepaid usage and ledger activity from the server APIs.
 - Recover from `402 Payment Required` by creating or resuming a top-up flow.
