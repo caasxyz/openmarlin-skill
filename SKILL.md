@@ -1,12 +1,21 @@
 ---
 name: openmarlin-registration
-description: "Guide platform registration, account linking, and server-routed provider selection for OpenMarlin in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, or send a native execution request with automatic routing, an explicit provider override, or simple routing hints. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
+description: "Guide platform registration, account linking, and server-routed provider selection for OpenMarlin in an OpenClaw-first flow. Use when: a user wants to register, sign in, connect a platform account, use OpenMarlin to answer a question or perform a task, or send a native execution request with automatic routing, an explicit provider override, or simple routing hints. Trigger on natural requests like 'use openmarlin to ...', 'ask openmarlin ...', '用 openmarlin ...', or '用 openmarlin 查一下 ...'. NOT for: collecting passwords in chat, issuing undocumented server policy overrides, or website-first onboarding."
 ---
 
 # OpenMarlin Registration
 
 Use this skill when a user wants to create, connect, or resume an
 OpenMarlin platform account from inside OpenClaw.
+
+Natural-language triggers that should activate this skill include:
+
+- "use openmarlin to answer this"
+- "ask openmarlin to summarize this page"
+- "use openmarlin to find today's USD/CNY exchange rate"
+- "用 openmarlin 查一下今天美元对人民币的汇率"
+- "用 openmarlin 执行这个任务"
+- "用 openmarlin 调一下这个远端 skill"
 
 ## Quick Summary
 
